@@ -184,6 +184,7 @@
 	vdd_cpux: regulator@65 {
 		compatible = "silergy,sy8106a";
 		reg = <0x65>;
+		silergy,fixed-microvolt = <1000000>;
 		regulator-min-microvolt = <1000000>;
 		regulator-max-microvolt = <1400000>;
 		regulator-ramp-delay = <200>;
@@ -194,7 +195,7 @@
 
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pa_pins>;
 	status = "okay";
 };
 

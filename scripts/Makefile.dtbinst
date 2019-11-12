@@ -6,8 +6,6 @@
 # INSTALL_DTBS_PATH directory or the default location:
 #
 #   $INSTALL_PATH/dtbs/$KERNELRELEASE
-#
-# Traverse through subdirectories listed in $(dts-dirs).
 # ==========================================================================
 
 src := $(obj)
@@ -21,11 +19,11 @@ include include/config/auto.conf
 include scripts/Kbuild.include
 include $(src)/Makefile
 
-dtbinst-files	:= $(dtb-y)
+dtbinst-files	:= $(sort $(dtb-y) $(if $(CONFIG_OF_ALL_DTBS), $(dtb-)))
 dtboinst-files	:= $(dtbo-y)
 script-files	:= $(scr-y)
 readme-files	:= $(dtbotxt-y)
-dtbinst-dirs	:= $(dts-dirs)
+dtbinst-dirs	:= $(subdir-y) $(subdir-m)
 
 # Helper targets for Installing DTBs into the boot directory
 quiet_cmd_dtb_install =	INSTALL $<

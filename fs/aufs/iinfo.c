@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -203,7 +204,7 @@ int au_iinfo_init(struct inode *inode)
 		nbr = 1;
 	hi = kmalloc_array(nbr, sizeof(*iinfo->ii_hinode), GFP_NOFS);
 	if (hi) {
-		au_ninodes_inc(sb);
+		au_lcnt_inc(&au_sbi(sb)->si_ninodes);
 
 		iinfo->ii_hinode = hi;
 		for (i = 0; i < nbr; i++, hi++)
@@ -251,7 +252,7 @@ void au_iinfo_fin(struct inode *inode)
 	AuDebugOn(au_is_bad_inode(inode));
 
 	sb = inode->i_sb;
-	au_ninodes_dec(sb);
+	au_lcnt_dec(&au_sbi(sb)->si_ninodes);
 	if (si_pid_test(sb))
 		au_xino_delete_inode(inode, unlinked);
 	else {
@@ -280,6 +281,6 @@ void au_iinfo_fin(struct inode *inode)
 			hi++;
 		}
 	}
-	kfree(iinfo->ii_hinode);
+	au_kfree_rcu(iinfo->ii_hinode);
 	AuRwDestroy(&iinfo->ii_rwsem);
 }

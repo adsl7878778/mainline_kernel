@@ -14,6 +14,7 @@
 #include <linux/tick.h>
 #include <linux/workqueue.h>
 #include <linux/compat.h>
+#include <linux/sched/deadline.h>
 
 #include "posix-timers.h"
 
@@ -66,13 +67,13 @@ static void bump_cpu_timer(struct k_itimer *timer, u64 now)
 	int i;
 	u64 delta, incr;
 
-	if (timer->it.cpu.incr == 0)
+	if (!timer->it_interval)
 		return;
 
 	if (now < timer->it.cpu.expires)
 		return;
 
-	incr = timer->it.cpu.incr;
+	incr = timer->it_interval;
 	delta = now + incr - timer->it.cpu.expires;
 
 	/* Don't use (incr*2 < delta), incr*2 might overflow. */
@@ -84,7 +85,7 @@ static void bump_cpu_timer(struct k_itimer *timer, u64 now)
 			continue;
 
 		timer->it.cpu.expires += incr;
-		timer->it_overrun += 1 << i;
+		timer->it_overrun += 1LL << i;
 		delta -= incr;
 	}
 }
@@ -374,7 +375,8 @@ static int posix_cpu_timer_del(struct k_itimer *timer)
 	struct sighand_struct *sighand;
 	struct task_struct *p = timer->it.cpu.task;
 
-	WARN_ON_ONCE(p == NULL);
+	if (WARN_ON_ONCE(!p))
+		return -EINVAL;
 
 	/*
 	 * Protect against sighand release/switch in exit/exec and process/
@@ -519,7 +521,7 @@ static void cpu_timer_fire(struct k_itimer *timer)
 		 */
 		wake_up_process(timer->it_process);
 		timer->it.cpu.expires = 0;
-	} else if (timer->it.cpu.incr == 0) {
+	} else if (!timer->it_interval) {
 		/*
 		 * One-shot timer.  Clear it as soon as it's fired.
 		 */
@@ -579,7 +581,8 @@ static int posix_cpu_timer_set(struct k_itimer *timer, int timer_flags,
 	u64 old_expires, new_expires, old_incr, val;
 	int ret;
 
-	WARN_ON_ONCE(p == NULL);
+	if (WARN_ON_ONCE(!p))
+		return -EINVAL;
 
 	/*
 	 * Use the to_ktime conversion because that clamps the maximum
@@ -603,10 +606,9 @@ static int posix_cpu_timer_set(struct k_itimer *timer, int timer_flags,
 	/*
 	 * Disarm any old timer after extracting its expiry time.
 	 */
-	WARN_ON_ONCE(!irqs_disabled());
 
 	ret = 0;
-	old_incr = timer->it.cpu.incr;
+	old_incr = timer->it_interval;
 	old_expires = timer->it.cpu.expires;
 	if (unlikely(timer->it.cpu.firing)) {
 		timer->it.cpu.firing = -1;
@@ -684,7 +686,7 @@ static int posix_cpu_timer_set(struct k_itimer *timer, int timer_flags,
 	 * Install the new reload setting, and
 	 * set up the signal and overrun bookkeeping.
 	 */
-	timer->it.cpu.incr = timespec64_to_ns(&new->it_interval);
+	timer->it_interval = timespec64_to_ktime(new->it_interval);
 
 	/*
 	 * This acts as a modification timestamp for the timer,
@@ -715,15 +717,16 @@ static int posix_cpu_timer_set(struct k_itimer *timer, int timer_flags,
 
 static void posix_cpu_timer_get(struct k_itimer *timer, struct itimerspec64 *itp)
 {
-	u64 now;
 	struct task_struct *p = timer->it.cpu.task;
+	u64 now;
 
-	WARN_ON_ONCE(p == NULL);
+	if (WARN_ON_ONCE(!p))
+		return;
 
 	/*
 	 * Easy part: convert the reload time.
 	 */
-	itp->it_interval = ns_to_timespec64(timer->it.cpu.incr);
+	itp->it_interval = ktime_to_timespec64(timer->it_interval);
 
 	if (!timer->it.cpu.expires)
 		return;
@@ -791,6 +794,14 @@ check_timers_list(struct list_head *timers,
 	return 0;
 }
 
+static inline void check_dl_overrun(struct task_struct *tsk)
+{
+	if (tsk->dl.dl_overrun) {
+		tsk->dl.dl_overrun = 0;
+		__group_send_sig_info(SIGXCPU, SEND_SIG_PRIV, tsk);
+	}
+}
+
 /*
  * Check for any per-thread CPU timers that have fired and move them off
  * the tsk->cpu_timers[N] list onto the firing list.  Here we update the
@@ -803,6 +814,9 @@ static void check_thread_timers(struct task_struct *tsk,
 	struct task_cputime *tsk_expires = &tsk->cputime_expires;
 	u64 expires;
 	unsigned long soft;
+
+	if (dl_task(tsk))
+		check_dl_overrun(tsk);
 
 	/*
 	 * If cputime_expires is zero, then there are no active
@@ -883,7 +897,7 @@ static void check_cpu_itimer(struct task_struct *tsk, struct cpu_itimer *it,
 
 		trace_itimer_expire(signo == SIGPROF ?
 				    ITIMER_PROF : ITIMER_VIRTUAL,
-				    tsk->signal->leader_pid, cur_time);
+				    task_tgid(tsk), cur_time);
 		__group_send_sig_info(signo, SEND_SIG_PRIV, tsk);
 	}
 
@@ -989,12 +1003,13 @@ static void check_process_timers(struct task_struct *tsk,
  */
 static void posix_cpu_timer_rearm(struct k_itimer *timer)
 {
+	struct task_struct *p = timer->it.cpu.task;
 	struct sighand_struct *sighand;
 	unsigned long flags;
-	struct task_struct *p = timer->it.cpu.task;
 	u64 now;
 
-	WARN_ON_ONCE(p == NULL);
+	if (WARN_ON_ONCE(!p))
+		return;
 
 	/*
 	 * Fetch the current sample and update the timer's expiry time.
@@ -1034,7 +1049,6 @@ static void posix_cpu_timer_rearm(struct k_itimer *timer)
 	/*
 	 * Now re-arm for the new expiry time.
 	 */
-	WARN_ON_ONCE(!irqs_disabled());
 	arm_timer(timer);
 unlock:
 	unlock_task_sighand(p, &flags);
@@ -1111,6 +1125,9 @@ static inline int fastpath_timer_check(struct task_struct *tsk)
 			return 1;
 	}
 
+	if (dl_task(tsk) && tsk->dl.dl_overrun)
+		return 1;
+
 	return 0;
 }
 
@@ -1125,7 +1142,7 @@ void run_posix_cpu_timers(struct task_struct *tsk)
 	struct k_itimer *timer, *next;
 	unsigned long flags;
 
-	WARN_ON_ONCE(!irqs_disabled());
+	lockdep_assert_irqs_disabled();
 
 	/*
 	 * The fast path checks that there are no expired thread or thread
@@ -1187,11 +1204,14 @@ void set_process_cpu_timer(struct task_struct *tsk, unsigned int clock_idx,
 			   u64 *newval, u64 *oldval)
 {
 	u64 now;
+	int ret;
 
-	WARN_ON_ONCE(clock_idx == CPUCLOCK_SCHED);
-	cpu_timer_sample_group(clock_idx, tsk, &now);
+	if (WARN_ON_ONCE(clock_idx >= CPUCLOCK_SCHED))
+		return;
 
-	if (oldval) {
+	ret = cpu_timer_sample_group(clock_idx, tsk, &now);
+
+	if (oldval && ret != -EINVAL) {
 		/*
 		 * We are setting itimer. The *oldval is absolute and we update
 		 * it to be relative, *newval argument is relative and we update
@@ -1363,8 +1383,8 @@ static long posix_cpu_nsleep_restart(struct restart_block *restart_block)
 	return do_cpu_nanosleep(which_clock, TIMER_ABSTIME, &t);
 }
 
-#define PROCESS_CLOCK	MAKE_PROCESS_CPUCLOCK(0, CPUCLOCK_SCHED)
-#define THREAD_CLOCK	MAKE_THREAD_CPUCLOCK(0, CPUCLOCK_SCHED)
+#define PROCESS_CLOCK	make_process_cpuclock(0, CPUCLOCK_SCHED)
+#define THREAD_CLOCK	make_thread_cpuclock(0, CPUCLOCK_SCHED)
 
 static int process_cpu_clock_getres(const clockid_t which_clock,
 				    struct timespec64 *tp)

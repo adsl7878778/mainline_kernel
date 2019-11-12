@@ -5609,7 +5609,7 @@ static void hw_var_set_mlme_sitesurvey(PADAPTER padapter, u8 variable, u8 *val)
 					tx_beacon_hdl(iface, NULL);
 					#endif
 					#endif
-					
+
 				}
 			}
 		}
@@ -5955,11 +5955,11 @@ static void process_c2h_event(PADAPTER padapter, PC2H_EVT_HDR pC2hEvent, u8 *c2h
 #endif /* CONFIG_FW_C2H_DEBUG */
 
 	default:
-		if (!(phydm_c2H_content_parsing(pDM_Odm, pC2hEvent->CmdID, pC2hEvent->CmdLen, c2hBuf))) 
+		if (!(phydm_c2H_content_parsing(pDM_Odm, pC2hEvent->CmdID, pC2hEvent->CmdLen, c2hBuf)))
 			RT_TRACE(_module_hal_init_c_, _drv_info_, ("%s: [WARNING] unknown C2H(0x%02x)\n", __func__, c2hCmdId));
-		
+
 		break;
-		
+
 	}
 
 #ifndef CONFIG_C2H_PACKET_EN
@@ -6452,18 +6452,18 @@ void SetHwReg8188F(PADAPTER padapter, u8 variable, u8 *val)
 		rtw_write32(padapter, REG_RCR, rtw_read32(padapter, REG_RCR) | (RCR_CBSSID_DATA));
 		break;
 #endif /*CONFIG_TDLS */
-		
+
 #ifdef CONFIG_ANTENNA_DIVERSITY
-	case HW_VAR_ANTENNA_DIVERSITY_SELECT: 
+	case HW_VAR_ANTENNA_DIVERSITY_SELECT:
 		{
 			u8	Optimum_antenna = (*(u8 *)val);
 			u8	Ant;
 			/*switch antenna to Optimum_antenna*/
 			/*DBG_8192C("==> HW_VAR_ANTENNA_DIVERSITY_SELECT , Ant_(%s)\n",(Optimum_antenna==2)?"A":"B");*/
-			if (pHalData->CurAntenna !=  Optimum_antenna) {					
+			if (pHalData->CurAntenna !=  Optimum_antenna) {
 				Ant = (Optimum_antenna == 2) ? MAIN_ANT : AUX_ANT;
 				ODM_UpdateRxIdleAnt(&pHalData->odmpriv, Ant);
-					
+
 				pHalData->CurAntenna = Optimum_antenna;
 				/*DBG_8192C("==> HW_VAR_ANTENNA_DIVERSITY_SELECT , Ant_(%s)\n",(Optimum_antenna==2)?"A":"B");*/
 			}

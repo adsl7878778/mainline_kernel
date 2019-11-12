@@ -45,17 +45,17 @@ void rtl8188e_query_rx_desc_status(
 	pattrib = &precvframe->u.hdr.attrib;
 	_rtw_memset(pattrib, 0, sizeof(struct rx_pkt_attrib));
 
-	pattrib->crc_err = (u8)((report.rxdw0 >> 14) & 0x1);;//(u8)prxreport->crc32;	
-	
+	pattrib->crc_err = (u8)((report.rxdw0 >> 14) & 0x1);;//(u8)prxreport->crc32;
+
 	// update rx report to recv_frame attribute
 	pattrib->pkt_rpt_type = (u8)((report.rxdw3 >> 14) & 0x3);//prxreport->rpt_sel;
-	
-	if(pattrib->pkt_rpt_type == NORMAL_RX)//Normal rx packet	
+
+	if(pattrib->pkt_rpt_type == NORMAL_RX)//Normal rx packet
 	{
 		pattrib->pkt_len = (u16)(report.rxdw0 &0x00003fff);//(u16)prxreport->pktlen;
 		pattrib->drvinfo_sz = (u8)((report.rxdw0 >> 16) & 0xf) * 8;//(u8)(prxreport->drvinfosize << 3);
-			
-		pattrib->physt =  (u8)((report.rxdw0 >> 26) & 0x1);//(u8)prxreport->physt;	
+
+		pattrib->physt =  (u8)((report.rxdw0 >> 26) & 0x1);//(u8)prxreport->physt;
 
 		pattrib->bdecrypted = (report.rxdw0 & BIT(27))? 0:1;//(u8)(prxreport->swdec ? 0 : 1);
 		pattrib->encrypt = (u8)((report.rxdw0 >> 20) & 0x7);//(u8)prxreport->security;
@@ -71,10 +71,10 @@ void rtl8188e_query_rx_desc_status(
 		pattrib->mdata = (u8)((report.rxdw1 >> 26) & 0x1);//(u8)prxreport->md;
 
 		pattrib->data_rate = (u8)(report.rxdw3 & 0x3f);//(u8)prxreport->rxmcs;
-		
+
 		pattrib->icv_err = (u8)((report.rxdw0 >> 15) & 0x1);//(u8)prxreport->icverr;
 		pattrib->shift_sz = (u8)((report.rxdw0 >> 24) & 0x3);
-	
+
 	}
 	else if(pattrib->pkt_rpt_type == TX_REPORT1)//CCX
 	{
@@ -91,12 +91,12 @@ void rtl8188e_query_rx_desc_status(
 		//
 		pattrib->MacIDValidEntry[0] = report.rxdw4;
 		pattrib->MacIDValidEntry[1] = report.rxdw5;
-		
+
 	}
 	else if(pattrib->pkt_rpt_type == HIS_REPORT)// USB HISR RPT
 	{
 		pattrib->pkt_len = (u16)(report.rxdw0 &0x00003fff);//(u16)prxreport->pktlen;
-	}	
-	
+	}
+
 }
 

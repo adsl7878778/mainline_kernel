@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +20,7 @@
  * inode operations (add entry)
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /*
@@ -58,7 +60,7 @@ static int epilog(struct inode *dir, aufs_bindex_t bindex,
 		dir = d_inode(dentry->d_parent); /* dir inode is locked */
 		IMustLock(dir);
 		au_dir_ts(dir, bindex);
-		dir->i_version++;
+		inode_inc_iversion(dir);
 		au_fhsm_wrote(sb, bindex, /*force*/0);
 		return 0; /* success */
 	}
@@ -246,11 +248,12 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	unsigned char created;
 	const unsigned char try_aopen
 		= (arg->type == Creat && arg->u.c.try_aopen);
+	struct vfsub_aopen_args *aopen = arg->u.c.aopen;
 	struct dentry *wh_dentry, *parent;
 	struct inode *h_dir;
 	struct super_block *sb;
 	struct au_branch *br;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct au_pin pin;
@@ -293,30 +296,42 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 	h_dir = au_pinned_h_dir(&a->pin);
 	switch (arg->type) {
 	case Creat:
-		err = 0;
-		if (!try_aopen || !h_dir->i_op->atomic_open)
+		if (!try_aopen || !h_dir->i_op->atomic_open) {
 			err = vfsub_create(h_dir, &a->h_path, arg->u.c.mode,
 					   arg->u.c.want_excl);
-		else
-			err = vfsub_atomic_open(h_dir, a->h_path.dentry,
-						arg->u.c.aopen, br);
+			created = !err;
+			if (!err && try_aopen)
+				aopen->file->f_mode |= FMODE_CREATED;
+		} else {
+			aopen->br = br;
+			err = vfsub_atomic_open(h_dir, a->h_path.dentry, aopen);
+			AuDbg("err %d\n", err);
+			AuDbgFile(aopen->file);
+			created = err >= 0
+				&& !!(aopen->file->f_mode & FMODE_CREATED);
+		}
 		break;
 	case Symlink:
 		err = vfsub_symlink(h_dir, &a->h_path, arg->u.s.symname);
+		created = !err;
 		break;
 	case Mknod:
 		err = vfsub_mknod(h_dir, &a->h_path, arg->u.m.mode,
 				  arg->u.m.dev);
+		created = !err;
 		break;
 	default:
 		BUG();
 	}
-	created = !err;
+	if (unlikely(err < 0))
+		goto out_unpin;
+
+	err = epilog(dir, btop, wh_dentry, dentry);
 	if (!err)
-		err = epilog(dir, btop, wh_dentry, dentry);
+		goto out_unpin; /* success */
 
 	/* revert */
-	if (unlikely(created && err && d_is_positive(a->h_path.dentry))) {
+	if (created /* && d_is_positive(a->h_path.dentry) */) {
 		/* no delegation since it is just created */
 		rerr = vfsub_unlink(h_dir, &a->h_path, /*delegated*/NULL,
 				    /*force*/0);
@@ -327,13 +342,14 @@ static int add_simple(struct inode *dir, struct dentry *dentry,
 		}
 		au_dtime_revert(&a->dt);
 	}
+	if (try_aopen && h_dir->i_op->atomic_open
+	    && (aopen->file->f_mode & FMODE_OPENED))
+		/* aopen->file is still opened */
+		au_lcnt_dec(&aopen->br->br_nfiles);
 
-	if (!err && try_aopen && !h_dir->i_op->atomic_open)
-		*arg->u.c.aopen->opened |= FILE_CREATED;
-
+out_unpin:
 	au_unpin(&a->pin);
 	dput(wh_dentry);
-
 out_parent:
 	if (!try_aopen)
 		di_write_unlock(parent);
@@ -345,7 +361,7 @@ out_unlock:
 	if (!try_aopen)
 		aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	return err;
 }
@@ -706,7 +722,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 
 	/*
 	 * aufs doesn't touch the credential so
-	 * security_dentry_create_files_as() is unnecrssary.
+	 * security_dentry_create_files_as() is unnecessary.
 	 */
 	if (au_opt_test(au_mntflags(sb), PLINK)) {
 		if (a->bdst < a->bsrc
@@ -771,7 +787,7 @@ int aufs_link(struct dentry *src_dentry, struct inode *dir,
 	}
 
 	au_dir_ts(dir, a->bdst);
-	dir->i_version++;
+	inode_inc_iversion(dir);
 	inc_nlink(inode);
 	inode->i_ctime = dir->i_ctime;
 	d_instantiate(dentry, au_igrab(inode));
@@ -805,7 +821,7 @@ out_unlock:
 	}
 	aufs_read_and_write_unlock2(dentry, src_dentry);
 out_kfree:
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	AuTraceErr(err);
 	return err;
@@ -914,7 +930,7 @@ out_unlock:
 	}
 	aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	return err;
 }

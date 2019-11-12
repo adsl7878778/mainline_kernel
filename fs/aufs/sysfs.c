@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -209,7 +210,7 @@ out_seq:
 		if (unlikely(err == PAGE_SIZE))
 			err = -EFBIG;
 	}
-	kfree(seq);
+	au_kfree_rcu(seq);
 out_unlock:
 	si_read_unlock(sb);
 out:
@@ -246,7 +247,8 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 
 	sz = sizeof(*arg) - offsetof(union aufs_brinfo, path);
 	for (bindex = 0; bindex <= bbot; bindex++, arg++) {
-		err = !access_ok(VERIFY_WRITE, arg, sizeof(*arg));
+		/* VERIFY_WRITE */
+		err = !access_ok(arg, sizeof(*arg));
 		if (unlikely(err))
 			break;
 
@@ -280,7 +282,7 @@ static int au_brinfo(struct super_block *sb, union aufs_brinfo __user *arg)
 		err = -EFAULT;
 
 out_seq:
-	kfree(seq);
+	au_kfree_rcu(seq);
 out_buf:
 	free_page((unsigned long)buf);
 out:
@@ -313,7 +315,7 @@ void sysaufs_br_init(struct au_branch *br)
 		attr = &br_sysfs->attr;
 		sysfs_attr_init(attr);
 		attr->name = br_sysfs->name;
-		attr->mode = S_IRUGO;
+		attr->mode = 0444;
 		br_sysfs++;
 	}
 }
@@ -325,8 +327,6 @@ void sysaufs_brs_del(struct super_block *sb, aufs_bindex_t bindex)
 	struct au_brsysfs *br_sysfs;
 	int i;
 	aufs_bindex_t bbot;
-
-	dbgaufs_brs_del(sb, bindex);
 
 	if (!sysaufs_brs)
 		return;
@@ -350,8 +350,6 @@ void sysaufs_brs_add(struct super_block *sb, aufs_bindex_t bindex)
 	struct kobject *kobj;
 	struct au_branch *br;
 	struct au_brsysfs *br_sysfs;
-
-	dbgaufs_brs_add(sb, bindex);
 
 	if (!sysaufs_brs)
 		return;

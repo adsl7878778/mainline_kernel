@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -126,8 +127,7 @@ static int au_cpdown_dir(struct dentry *dentry, aufs_bindex_t bdst,
 		goto out;
 	h_path.dentry = au_h_dptr(dentry, bdst);
 	h_path.mnt = au_sbr_mnt(dentry->d_sb, bdst);
-	err = vfsub_sio_mkdir(au_h_iptr(dir, bdst), &h_path,
-			      S_IRWXU | S_IRUGO | S_IXUGO);
+	err = vfsub_sio_mkdir(au_h_iptr(dir, bdst), &h_path, 0755);
 	if (unlikely(err))
 		goto out_put;
 	au_fset_cpdown(*flags, MADE_DIR);
@@ -461,7 +461,7 @@ static void au_mfs(struct dentry *dentry, struct dentry *parent)
 
 	mfs->mfsrr_bytes = bavail;
 	AuDbg("b%d\n", mfs->mfs_bindex);
-	kfree(st);
+	au_kfree_rcu(st);
 }
 
 static int au_wbr_create_mfs(struct dentry *dentry, unsigned int flags)

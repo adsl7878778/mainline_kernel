@@ -214,9 +214,9 @@ void rtl8188es_free_recv_priv(PADAPTER padapter)
 
 #ifdef CONFIG_SDIO_RX_COPY
 static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbuf, u8 *pphy_status)
-{	
+{
 	s32 ret=_SUCCESS;
-#ifdef CONFIG_CONCURRENT_MODE	
+#ifdef CONFIG_CONCURRENT_MODE
 	u8 *secondary_myid, *paddr1;
 	union recv_frame	*precvframe_if2 = NULL;
 	_adapter *primary_padapter = precvframe->u.hdr.adapter;
@@ -235,25 +235,25 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 		secondary_myid = adapter_mac_addr(secondary_padapter);
 
 		if(_rtw_memcmp(paddr1, secondary_myid, ETH_ALEN))
-		{			
+		{
 			//change to secondary interface
 			precvframe->u.hdr.adapter = secondary_padapter;
-		}	
+		}
 
 		//ret = recv_entry(precvframe);
 
 	}
-	else // Handle BC/MC Packets	
+	else // Handle BC/MC Packets
 	{
 		//clone/copy to if2
 		_pkt	 *pkt_copy = NULL;
 		struct rx_pkt_attrib *pattrib = NULL;
-		
+
 		precvframe_if2 = rtw_alloc_recvframe(pfree_recv_queue);
 
 		if(!precvframe_if2)
 			return _FAIL;
-		
+
 		precvframe_if2->u.hdr.adapter = secondary_padapter;
 		_rtw_memcpy(&precvframe_if2->u.hdr.attrib, &precvframe->u.hdr.attrib, sizeof(struct rx_pkt_attrib));
 		pattrib = &precvframe_if2->u.hdr.attrib;
@@ -266,7 +266,7 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 		if (pkt_copy == NULL)
 		{
 			if((pattrib->mfrag == 1)&&(pattrib->frag_num == 0))
-			{				
+			{
 				DBG_8192C("pre_recv_entry(): rtw_skb_copy fail , drop frag frame \n");
 				rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);
 				return ret;
@@ -280,7 +280,7 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 				return ret;
 			}
 		}
-		
+
 		pkt_copy->dev = secondary_padapter->pnetdev;
 
 		precvframe_if2->u.hdr.pkt = pkt_copy;
@@ -295,7 +295,7 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 		if ( pHalData->ReceiveConfig & RCR_APPFCS)
 			recvframe_pull_tail(precvframe_if2, IEEE80211_FCS_LEN);
 
-		if (pattrib->physt) 
+		if (pattrib->physt)
 			rx_query_phy_status(precvframe_if2, pphy_status);
 
 		if(rtw_recv_entry(precvframe_if2) != _SUCCESS)
@@ -304,7 +304,7 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 				("recvbuf2recvframe: rtw_recv_entry(precvframe) != _SUCCESS\n"));
 		}
 	}
-	
+
 	if (precvframe->u.hdr.attrib.physt)
 		rx_query_phy_status(precvframe, pphy_status);
 	ret = rtw_recv_entry(precvframe);
@@ -336,13 +336,13 @@ static void rtl8188es_recv_tasklet(void *priv)
 	padapter = (PADAPTER)priv;
 	pHalData = GET_HAL_DATA(padapter);
 	precvpriv = &padapter->recvpriv;
-	
+
 	do {
 		if (RTW_CANNOT_RUN(padapter)) {
 			DBG_8192C("recv_tasklet => bDriverStopped or bSurpriseRemoved\n");
 			break;
 		}
-		
+
 		precvbuf = rtw_dequeue_recvbuf(&precvpriv->recv_buf_pending_queue);
 		if (NULL == precvbuf) break;
 
@@ -403,7 +403,7 @@ static void rtl8188es_recv_tasklet(void *priv)
 					}
 				}
 			#endif
-			
+
 				DBG_8192C("%s: crc_err=%d icv_err=%d, skip!\n", __FUNCTION__, pattrib->crc_err, pattrib->icv_err);
 				rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);
 			}
@@ -454,12 +454,12 @@ static void rtl8188es_recv_tasklet(void *priv)
 				else
 				{
 					if((pattrib->mfrag == 1)&&(pattrib->frag_num == 0))
-					{				
+					{
 						DBG_8192C("rtl8188es_recv_tasklet: alloc_skb fail , drop frag frame \n");
 						rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);
 						break;
 					}
-					
+
 					precvframe->u.hdr.pkt = rtw_skb_clone(precvbuf->pskb);
 					if(precvframe->u.hdr.pkt)
 					{
@@ -467,7 +467,7 @@ static void rtl8188es_recv_tasklet(void *priv)
 
 						pkt_clone->data = ptr + rx_report_sz + pattrib->shift_sz;
 						skb_reset_tail_pointer(pkt_clone);
-						precvframe->u.hdr.rx_head = precvframe->u.hdr.rx_data = precvframe->u.hdr.rx_tail 
+						precvframe->u.hdr.rx_head = precvframe->u.hdr.rx_data = precvframe->u.hdr.rx_tail
 							= pkt_clone->data;
 						precvframe->u.hdr.rx_end =  pkt_clone->data + skb_len;
 					}
@@ -495,7 +495,7 @@ static void rtl8188es_recv_tasklet(void *priv)
 				if(pattrib->pkt_rpt_type == NORMAL_RX)//Normal rx packet
 				{
 					pphy_status = (ptr + (rx_report_sz - pattrib->drvinfo_sz));
-				
+
 #ifdef CONFIG_CONCURRENT_MODE
 					if(rtw_buddy_adapter_up(padapter))
 					{
@@ -538,10 +538,10 @@ static void rtl8188es_recv_tasklet(void *priv)
 					}
 					/*
 					else if(pattrib->pkt_rpt_type == HIS_REPORT){
-						printk("rx USB HISR \n");						
+						printk("rx USB HISR \n");
 					}*/
 
-					rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);					
+					rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);
 
 				}
 			}
@@ -550,7 +550,7 @@ static void rtl8188es_recv_tasklet(void *priv)
 
 			pkt_offset = _RND128(pkt_offset);
 			transfer_len -= pkt_offset;
-			ptr += pkt_offset;	
+			ptr += pkt_offset;
 			precvframe = NULL;
 			pkt_copy = NULL;
 		}while(transfer_len>0);
@@ -563,9 +563,9 @@ static void rtl8188es_recv_tasklet(void *priv)
 }
 #else
 static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbuf, u8 *pphy_status)
-{	
+{
 	s32 ret=_SUCCESS;
-#ifdef CONFIG_CONCURRENT_MODE	
+#ifdef CONFIG_CONCURRENT_MODE
 	u8 *secondary_myid, *paddr1;
 	union recv_frame	*precvframe_if2 = NULL;
 	_adapter *primary_padapter = precvframe->u.hdr.adapter;
@@ -585,29 +585,29 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 		secondary_myid = adapter_mac_addr(secondary_padapter);
 
 		if(_rtw_memcmp(paddr1, secondary_myid, ETH_ALEN))
-		{			
+		{
 			//change to secondary interface
 			precvframe->u.hdr.adapter = secondary_padapter;
-		}	
+		}
 
 		//ret = recv_entry(precvframe);
 
 	}
-	else // Handle BC/MC Packets	
+	else // Handle BC/MC Packets
 	{
 		//clone/copy to if2
 		u8 shift_sz = 0;
-		u32 alloc_sz, skb_len;		
+		u32 alloc_sz, skb_len;
 		_pkt	 *pkt_copy = NULL;
 		struct rx_pkt_attrib *pattrib = NULL;
-		
+
 		precvframe_if2 = rtw_alloc_recvframe(pfree_recv_queue);
 
 		if(!precvframe_if2)
 			return _FAIL;
-		
+
 		precvframe_if2->u.hdr.adapter = secondary_padapter;
-		_rtw_init_listhead(&precvframe_if2->u.hdr.list);	
+		_rtw_init_listhead(&precvframe_if2->u.hdr.list);
 		precvframe_if2->u.hdr.precvbuf = NULL;	//can't access the precvbuf for new arch.
 		precvframe_if2->u.hdr.len=0;
 		_rtw_memcpy(&precvframe_if2->u.hdr.attrib, &precvframe->u.hdr.attrib, sizeof(struct rx_pkt_attrib));
@@ -649,7 +649,7 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 #if 1
 		precvframe_if2->u.hdr.pkt = pkt_copy;
 		precvframe_if2->u.hdr.rx_head = pkt_copy->head;
-		precvframe_if2->u.hdr.rx_data = precvframe_if2->u.hdr.rx_tail = pkt_copy->data; 
+		precvframe_if2->u.hdr.rx_data = precvframe_if2->u.hdr.rx_tail = pkt_copy->data;
 		precvframe_if2->u.hdr.rx_end = pkt_copy->data + alloc_sz;
 #endif
 		recvframe_put(precvframe_if2, pkt_offset);
@@ -658,7 +658,7 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 		if ( pHalData->ReceiveConfig & RCR_APPFCS)
 			recvframe_pull_tail(precvframe_if2, IEEE80211_FCS_LEN);
 
-		if (pattrib->physt) 
+		if (pattrib->physt)
 			rx_query_phy_status(precvframe_if2, pphy_status);
 
 		if(rtw_recv_entry(precvframe_if2) != _SUCCESS)
@@ -667,7 +667,7 @@ static s32 pre_recv_entry(union recv_frame *precvframe, struct recv_buf	*precvbu
 				("recvbuf2recvframe: rtw_recv_entry(precvframe) != _SUCCESS\n"));
 		}
 	}
-	
+
 	if (precvframe->u.hdr.attrib.physt)
 		rx_query_phy_status(precvframe, pphy_status);
 	ret = rtw_recv_entry(precvframe);
@@ -691,14 +691,14 @@ static void rtl8188es_recv_tasklet(void *priv)
 	_pkt		*ppkt;
 	u32			pkt_offset;
 	_irqL		irql;
-#ifdef CONFIG_CONCURRENT_MODE	
+#ifdef CONFIG_CONCURRENT_MODE
 	struct recv_stat	*prxstat;
 #endif
 
 	padapter = (PADAPTER)priv;
 	pHalData = GET_HAL_DATA(padapter);
 	precvpriv = &padapter->recvpriv;
-	
+
 	do {
 		precvbuf = rtw_dequeue_recvbuf(&precvpriv->recv_buf_pending_queue);
 		if (NULL == precvbuf) break;
@@ -759,7 +759,7 @@ static void rtl8188es_recv_tasklet(void *priv)
 					}
 				}
 			#endif
-	
+
 				DBG_8192C("%s: crc_err=%d icv_err=%d, skip!\n", __FUNCTION__, pattrib->crc_err, pattrib->icv_err);
 				rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);
 			}
@@ -818,7 +818,7 @@ static void rtl8188es_recv_tasklet(void *priv)
 					else
 #endif
 					{
-						if (pattrib->physt) 
+						if (pattrib->physt)
 							rx_query_phy_status(precvframe, ptr);
 
 					if (rtw_recv_entry(precvframe) != _SUCCESS)
@@ -850,7 +850,7 @@ static void rtl8188es_recv_tasklet(void *priv)
 						DBG_8192C("rx USB HISR \n");
 					}*/
 
-					rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);					
+					rtw_free_recvframe(precvframe, &precvpriv->free_recv_queue);
 
 				}
 			}

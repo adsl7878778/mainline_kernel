@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2011-2017 Junjiro R. Okajima
+ * Copyright (C) 2011-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -642,7 +643,8 @@ int au_mvdown(struct dentry *dentry, struct aufs_mvdown __user *uarg)
 
 	err = copy_from_user(&args->mvdown, uarg, sizeof(args->mvdown));
 	if (!err)
-		err = !access_ok(VERIFY_WRITE, uarg, sizeof(*uarg));
+		/* VERIFY_WRITE */
+		err = !access_ok(uarg, sizeof(*uarg));
 	if (unlikely(err)) {
 		err = -EFAULT;
 		AuTraceErr(err);
@@ -697,7 +699,7 @@ out_free:
 	e = copy_to_user(uarg, &args->mvdown, sizeof(args->mvdown));
 	if (unlikely(e))
 		err = -EFAULT;
-	kfree(args);
+	au_kfree_rcu(args);
 out:
 	AuTraceErr(err);
 	return err;

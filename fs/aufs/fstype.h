@@ -1,5 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -387,7 +388,7 @@ static inline int au_test_fs_rr(struct super_block *sb)
 
 /*
  * test if the @inode is nfs with 'noacl' option
- * NFS always sets MS_POSIXACL regardless its mount option 'noacl.'
+ * NFS always sets SB_POSIXACL regardless its mount option 'noacl.'
  */
 static inline int au_test_nfs_noacl(struct inode *inode)
 {

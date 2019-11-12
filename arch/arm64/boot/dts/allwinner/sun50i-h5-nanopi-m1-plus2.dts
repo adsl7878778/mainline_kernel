@@ -101,11 +101,11 @@
 		status = "okay";
 	};
 
-	 wifi_pwrseq: wifi_pwrseq {
-        compatible = "mmc-pwrseq-simple";
-        reset-gpios = <&pio 0 9 GPIO_ACTIVE_LOW>; /* PA9 */
-        post-power-on-delay-ms = <50>;
-    };
+	wifi_pwrseq: wifi_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>; /* PL7 */
+		post-power-on-delay-ms = <50>;
+	};
 
 };
 
@@ -142,8 +142,6 @@
 };
 
 &mmc0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
 	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
@@ -151,8 +149,6 @@
 };
 
 &mmc1 {
-        pinctrl-names = "default";
-        pinctrl-0 = <&mmc1_pins_a>;
         vmmc-supply = <&reg_vcc3v3>;
         vqmmc-supply = <&reg_vcc3v3>;
         mmc-pwrseq = <&wifi_pwrseq>;
@@ -163,8 +159,8 @@
         brcmf: brcmf@1 {
                 reg = <1>;
                 compatible = "brcm,bcm4329-fmac";
-                interrupt-parent = <&r_pio>;
-                interrupts = <0 7 IRQ_TYPE_LEVEL_LOW>; /* PL7 / EINT7 */
+                interrupt-parent = <&pio>;
+                interrupts = <6 10 IRQ_TYPE_LEVEL_LOW>; /* PG10 */
                 interrupt-names = "host-wake";
                 pinctrl-names = "default";
                 pinctrl-0 = <&wifi_wake>;
@@ -231,7 +227,7 @@
 
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pa_pins>;
 	status = "okay";
 };
 

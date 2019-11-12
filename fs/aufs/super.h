@@ -1,5 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +28,7 @@
 #include <linux/fs.h>
 #include <linux/kobject.h>
 #include "hbl.h"
+#include "lcnt.h"
 #include "rwsem.h"
 #include "wkq.h"
 
@@ -85,7 +87,7 @@ struct au_sbinfo {
 	struct au_nowait_tasks	si_nowait;
 
 	/*
-	 * tried sb->s_umount, but failed due to the dependecy between i_mutex.
+	 * tried sb->s_umount, but failed due to the dependency between i_mutex.
 	 * rwsem for au_sbinfo is necessary.
 	 */
 	struct au_rwsem		si_rwsem;
@@ -94,7 +96,7 @@ struct au_sbinfo {
 	 * dirty approach to protect sb->sb_inodes and ->s_files (gone) from
 	 * remount.
 	 */
-	struct percpu_counter	si_ninodes, si_nfiles;
+	au_lcnt_t		si_ninodes, si_nfiles;
 
 	/* branch management */
 	unsigned int		si_generation;
@@ -131,12 +133,14 @@ struct au_sbinfo {
 	/* external inode number (bitmap and translation table) */
 	vfs_readf_t		si_xread;
 	vfs_writef_t		si_xwrite;
+	loff_t			si_ximaxent;	/* max entries in a xino */
+
 	struct file		*si_xib;
 	struct mutex		si_xib_mtx; /* protect xib members */
 	unsigned long		*si_xib_buf;
 	unsigned long		si_xib_last_pindex;
 	int			si_xib_next_bit;
-	aufs_bindex_t		si_xino_brid;
+
 	unsigned long		si_xino_jiffy;
 	unsigned long		si_xino_expire;
 	/* reserved for future use */
@@ -144,11 +148,12 @@ struct au_sbinfo {
 
 #ifdef CONFIG_AUFS_EXPORT
 	/* i_generation */
+	/* todo: make xigen file an array to support many inode numbers */
 	struct file		*si_xigen;
 	atomic_t		si_xigen_next;
 #endif
 
-	/* dirty trick to suppoer atomic_open */
+	/* dirty trick to support atomic_open */
 	struct hlist_bl_head	si_aopen;
 
 	/* vdir parameters */
@@ -179,7 +184,7 @@ struct au_sbinfo {
 	/*
 	 * sysfs and lifetime management.
 	 * this is not a small structure and it may be a waste of memory in case
-	 * of sysfs is disabled, particulary when many aufs-es are mounted.
+	 * of sysfs is disabled, particularly when many aufs-es are mounted.
 	 * but using sysfs is majority.
 	 */
 	struct kobject		si_kobj;
@@ -204,7 +209,7 @@ struct au_sbinfo {
 /*
  * set true when refresh_dirs() failed at remount time.
  * then try refreshing dirs at access time again.
- * if it is false, refreshing dirs at access time is unnecesary
+ * if it is false, refreshing dirs at access time is unnecessary
  */
 #define AuSi_FAILED_REFRESH_DIR	1
 #define AuSi_FHSM		(1 << 1)	/* fhsm is active now */
@@ -345,7 +350,7 @@ int au_test_nfsd(void);
 void au_export_init(struct super_block *sb);
 void au_xigen_inc(struct inode *inode);
 int au_xigen_new(struct inode *inode);
-int au_xigen_set(struct super_block *sb, struct file *base);
+int au_xigen_set(struct super_block *sb, struct path *path);
 void au_xigen_clr(struct super_block *sb);
 
 static inline int au_busy_or_stale(void)
@@ -359,7 +364,7 @@ AuStubInt0(au_test_nfsd, void)
 AuStubVoid(au_export_init, struct super_block *sb)
 AuStubVoid(au_xigen_inc, struct inode *inode)
 AuStubInt0(au_xigen_new, struct inode *inode)
-AuStubInt0(au_xigen_set, struct super_block *sb, struct file *base)
+AuStubInt0(au_xigen_set, struct super_block *sb, struct path *path)
 AuStubVoid(au_xigen_clr, struct super_block *sb)
 AuStub(int, au_busy_or_stale, return -EBUSY, void)
 #endif /* CONFIG_AUFS_EXPORT */
@@ -433,7 +438,7 @@ static inline void dbgaufs_si_null(struct au_sbinfo *sbinfo)
 
 /* current->atomic_flags */
 /* this value should never corrupt the ones defined in linux/sched.h */
-#define PFA_AUFS	7
+#define PFA_AUFS	0x10
 
 TASK_PFA_TEST(AUFS, test_aufs)	/* task_test_aufs */
 TASK_PFA_SET(AUFS, aufs)	/* task_set_aufs */
@@ -567,42 +572,6 @@ static inline unsigned int au_sigen(struct super_block *sb)
 	return au_sbi(sb)->si_generation;
 }
 
-static inline unsigned long long au_ninodes(struct super_block *sb)
-{
-	s64 n = percpu_counter_sum(&au_sbi(sb)->si_ninodes);
-
-	BUG_ON(n < 0);
-	return n;
-}
-
-static inline void au_ninodes_inc(struct super_block *sb)
-{
-	percpu_counter_inc(&au_sbi(sb)->si_ninodes);
-}
-
-static inline void au_ninodes_dec(struct super_block *sb)
-{
-	percpu_counter_dec(&au_sbi(sb)->si_ninodes);
-}
-
-static inline unsigned long long au_nfiles(struct super_block *sb)
-{
-	s64 n = percpu_counter_sum(&au_sbi(sb)->si_nfiles);
-
-	BUG_ON(n < 0);
-	return n;
-}
-
-static inline void au_nfiles_inc(struct super_block *sb)
-{
-	percpu_counter_inc(&au_sbi(sb)->si_nfiles);
-}
-
-static inline void au_nfiles_dec(struct super_block *sb)
-{
-	percpu_counter_dec(&au_sbi(sb)->si_nfiles);
-}
-
 static inline struct au_branch *au_sbr(struct super_block *sb,
 				       aufs_bindex_t bindex)
 {
@@ -610,16 +579,10 @@ static inline struct au_branch *au_sbr(struct super_block *sb,
 	return au_sbi(sb)->si_branch[0 + bindex];
 }
 
-static inline void au_xino_brid_set(struct super_block *sb, aufs_bindex_t brid)
-{
-	SiMustWriteLock(sb);
-	au_sbi(sb)->si_xino_brid = brid;
-}
-
-static inline aufs_bindex_t au_xino_brid(struct super_block *sb)
+static inline loff_t au_xi_maxent(struct super_block *sb)
 {
 	SiMustAnyLock(sb);
-	return au_sbi(sb)->si_xino_brid;
+	return au_sbi(sb)->si_ximaxent;
 }
 
 #endif /* __KERNEL__ */

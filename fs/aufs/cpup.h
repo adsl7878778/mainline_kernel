@@ -1,5 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,7 +90,7 @@ int au_test_and_cpup_dirs(struct dentry *dentry, aufs_bindex_t bdst);
 struct au_dtime {
 	struct dentry *dt_dentry;
 	struct path dt_h_path;
-	struct timespec dt_atime, dt_mtime;
+	struct timespec64 dt_atime, dt_mtime;
 };
 void au_dtime_store(struct au_dtime *dt, struct dentry *dentry,
 		    struct path *h_path);

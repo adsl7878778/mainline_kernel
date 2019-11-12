@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +21,7 @@
  * todo: this is crazy monster
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 enum { AuSRC, AuDST, AuSrcDst };
@@ -658,7 +660,7 @@ out:
  * locking order
  * (VFS)
  * - src_dir and dir by lock_rename()
- * - inode if exitsts
+ * - inode if exists
  * (aufs)
  * - lock all
  *   + src_dentry and dentry by aufs_read_and_write_lock2() which calls,
@@ -751,7 +753,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 	struct inode *dir;
 
 	dir = a->dst_dir;
-	dir->i_version++;
+	inode_inc_iversion(dir);
 	if (au_ftest_ren(a->auren_flags, ISDIR_SRC)) {
 		/* is this updating defined in POSIX? */
 		au_cpup_attr_timesizes(a->src_inode);
@@ -761,7 +763,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 
 	if (a->exchange) {
 		dir = a->src_dir;
-		dir->i_version++;
+		inode_inc_iversion(dir);
 		if (au_ftest_ren(a->auren_flags, ISDIR_DST)) {
 			/* is this updating defined in POSIX? */
 			au_cpup_attr_timesizes(a->dst_inode);
@@ -774,7 +776,7 @@ static void au_ren_refresh_dir(struct au_ren_args *a)
 		return;
 
 	dir = a->src_dir;
-	dir->i_version++;
+	inode_inc_iversion(dir);
 	if (au_ftest_ren(a->auren_flags, ISDIR_SRC))
 		au_cpup_attr_nlink(dir, /*force*/1);
 	au_dir_ts(dir, a->btgt);
@@ -976,6 +978,8 @@ int aufs_rename(struct inode *_src_dir, struct dentry *_src_dentry,
 		goto out;
 
 	a->flags = _flags;
+	BUILD_BUG_ON(sizeof(a->exchange) == sizeof(u8)
+		     && RENAME_EXCHANGE > U8_MAX);
 	a->exchange = _flags & RENAME_EXCHANGE;
 	a->src_dir = _src_dir;
 	a->src_dentry = _src_dentry;
@@ -1239,7 +1243,7 @@ out_free:
 	iput(a->dst_inode);
 	if (a->thargs)
 		au_whtmp_rmdir_free(a->thargs);
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	AuTraceErr(err);
 	return err;

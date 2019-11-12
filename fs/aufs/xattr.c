@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2014-2017 Junjiro R. Okajima
+ * Copyright (C) 2014-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -116,7 +117,7 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 	h_isrc = d_inode(h_src);
 	h_idst = d_inode(h_dst);
 	inode_unlock(h_idst);
-	vfsub_inode_lock_shared_nested(h_isrc, AuLsc_I_CHILD);
+	inode_lock_shared_nested(h_isrc, AuLsc_I_CHILD);
 	inode_lock_nested(h_idst, AuLsc_I_CHILD2);
 	unlocked = 0;
 
@@ -178,10 +179,10 @@ int au_cpup_xattr(struct dentry *h_dst, struct dentry *h_src, int ignore_flags,
 		AuTraceErr(err);
 	}
 
-	kfree(value);
+	au_kfree_try_rcu(value);
 
 out_free:
-	kfree(o);
+	au_kfree_try_rcu(o);
 out:
 	if (!unlocked)
 		inode_unlock_shared(h_isrc);

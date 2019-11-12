@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +35,7 @@ void *au_krealloc(void *p, unsigned int new_sz, gfp_t gfp, int may_shrink)
 	if (p) {
 #if 0 /* unused */
 		if (!new_sz) {
-			kfree(p);
+			au_kfree_rcu(p);
 			p = NULL;
 			goto out;
 		}
@@ -58,7 +59,7 @@ void *au_krealloc(void *p, unsigned int new_sz, gfp_t gfp, int may_shrink)
 		if (q) {
 			if (p) {
 				memcpy(q, p, new_sz);
-				kfree(p);
+				au_kfree_try_rcu(p);
 			}
 			p = q;
 		} else
@@ -149,12 +150,12 @@ MODULE_ALIAS_FS(AUFS_NAME);
 /* this module parameter has no meaning when SYSFS is disabled */
 int sysaufs_brs = 1;
 MODULE_PARM_DESC(brs, "use <sysfs>/fs/aufs/si_*/brN");
-module_param_named(brs, sysaufs_brs, int, S_IRUGO);
+module_param_named(brs, sysaufs_brs, int, 0444);
 
 /* this module parameter has no meaning when USER_NS is disabled */
 bool au_userns;
 MODULE_PARM_DESC(allow_userns, "allow unprivileged to mount under userns");
-module_param_named(allow_userns, au_userns, bool, S_IRUGO);
+module_param_named(allow_userns, au_userns, bool, 0444);
 
 /* ---------------------------------------------------------------------- */
 
@@ -202,9 +203,12 @@ static int __init aufs_init(void)
 	err = sysaufs_init();
 	if (unlikely(err))
 		goto out;
-	err = au_procfs_init();
+	err = dbgaufs_init();
 	if (unlikely(err))
 		goto out_sysaufs;
+	err = au_procfs_init();
+	if (unlikely(err))
+		goto out_dbgaufs;
 	err = au_wkq_init();
 	if (unlikely(err))
 		goto out_procfs;
@@ -242,6 +246,8 @@ out_wkq:
 	au_wkq_fin();
 out_procfs:
 	au_procfs_fin();
+out_dbgaufs:
+	dbgaufs_fin();
 out_sysaufs:
 	sysaufs_fin();
 	au_dy_fin();
@@ -258,6 +264,7 @@ static void __exit aufs_exit(void)
 	au_loopback_fin();
 	au_wkq_fin();
 	au_procfs_fin();
+	dbgaufs_fin();
 	sysaufs_fin();
 	au_dy_fin();
 }

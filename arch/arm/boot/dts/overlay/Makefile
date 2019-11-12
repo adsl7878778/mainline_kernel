@@ -1,5 +1,4 @@
-ifeq ($(CONFIG_OF_CONFIGFS),y)
-
+# SPDX-License-Identifier: GPL-2.0
 dtbo-$(CONFIG_MACH_SUN4I) += \
 	sun4i-a10-analog-codec.dtbo \
 	sun4i-a10-can.dtbo \
@@ -9,9 +8,6 @@ dtbo-$(CONFIG_MACH_SUN4I) += \
 	sun4i-a10-pps-gpio.dtbo \
 	sun4i-a10-pwm.dtbo \
 	sun4i-a10-spdif-out.dtbo \
-	sun4i-a10-spi0.dtbo \
-	sun4i-a10-spi1.dtbo \
-	sun4i-a10-spi2.dtbo \
 	sun4i-a10-spi-jedec-nor.dtbo \
 	sun4i-a10-spi-spidev.dtbo \
 	sun4i-a10-uart2.dtbo \
@@ -22,6 +18,22 @@ dtbo-$(CONFIG_MACH_SUN4I) += \
 	sun4i-a10-uart7.dtbo \
 	sun4i-a10-w1-gpio.dtbo
 
+dtbo-$(CONFIG_MACH_SUN5I) += \
+	sun5i-a13-analog-codec.dtbo \
+	sun5i-a13-i2c1.dtbo \
+	sun5i-a13-i2c2.dtbo \
+	sun5i-a13-nand.dtbo \
+	sun5i-a13-pwm.dtbo \
+	sun5i-a13-spi0.dtbo \
+	sun5i-a13-spi1.dtbo \
+	sun5i-a13-spi2.dtbo \
+	sun5i-a13-spi-jedec-nor.dtbo \
+	sun5i-a13-spi-spidev.dtbo \
+	sun5i-a13-uart0.dtbo \
+	sun5i-a13-uart1.dtbo \
+	sun5i-a13-uart2.dtbo \
+	sun5i-a13-uart3.dtbo
+
 dtbo-$(CONFIG_MACH_SUN7I) += \
 	sun7i-a20-analog-codec.dtbo \
 	sun7i-a20-can.dtbo \
@@ -29,16 +41,11 @@ dtbo-$(CONFIG_MACH_SUN7I) += \
 	sun7i-a20-i2c2.dtbo \
 	sun7i-a20-i2c3.dtbo \
 	sun7i-a20-i2c4.dtbo \
-	sun7i-a20-i2s0.dtbo \
-	sun7i-a20-i2s1.dtbo \
 	sun7i-a20-mmc2.dtbo \
 	sun7i-a20-nand.dtbo \
 	sun7i-a20-pps-gpio.dtbo \
 	sun7i-a20-pwm.dtbo \
 	sun7i-a20-spdif-out.dtbo \
-	sun7i-a20-spi0.dtbo \
-	sun7i-a20-spi1.dtbo \
-	sun7i-a20-spi2.dtbo \
 	sun7i-a20-spi-add-cs1.dtbo \
 	sun7i-a20-spi-jedec-nor.dtbo \
 	sun7i-a20-spi-spidev.dtbo \
@@ -72,16 +79,11 @@ dtbo-$(CONFIG_MACH_SUN8I) += \
 	sun8i-h3-w1-gpio.dtbo
 
 scr-$(CONFIG_MACH_SUN4I) += sun4i-a10-fixup.scr
+scr-$(CONFIG_MACH_SUN5I) += sun5i-a13-fixup.scr
 scr-$(CONFIG_MACH_SUN7I) += sun7i-a20-fixup.scr
 scr-$(CONFIG_MACH_SUN8I) += sun8i-h3-fixup.scr
 
 dtbotxt-$(CONFIG_MACH_SUN4I) += README.sun4i-a10-overlays
+dtbotxt-$(CONFIG_MACH_SUN5I) += README.sun5i-a13-overlays
 dtbotxt-$(CONFIG_MACH_SUN7I) += README.sun7i-a20-overlays
 dtbotxt-$(CONFIG_MACH_SUN8I) += README.sun8i-h3-overlays
-
-targets += $(dtbo-y) $(scr-y) $(dtbotxt-y)
-
-endif
-
-always		:= $(dtbo-y) $(scr-y) $(dtbotxt-y)
-clean-files	:= *.dtbo *.scr

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +20,7 @@
  * inode operations (del entry)
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /*
@@ -148,7 +150,7 @@ out:
 
 /*
  * decide the branch where we operate for @dentry. the branch index will be set
- * @rbcpup. after diciding it, 'pin' it and store the timestamps of the parent
+ * @rbcpup. after deciding it, 'pin' it and store the timestamps of the parent
  * dir for reverting.
  * when a new whiteout is necessary, create it.
  */
@@ -269,7 +271,7 @@ static void epilog(struct inode *dir, struct dentry *dentry,
 	inode->i_ctime = dir->i_ctime;
 
 	au_dir_ts(dir, bindex);
-	dir->i_version++;
+	inode_inc_iversion(dir);
 }
 
 /*
@@ -304,7 +306,7 @@ int aufs_unlink(struct inode *dir, struct dentry *dentry)
 	aufs_bindex_t bwh, bindex, btop;
 	struct inode *inode, *h_dir, *delegated;
 	struct dentry *parent, *wh_dentry;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct au_pin pin;
@@ -394,7 +396,7 @@ out_parent:
 out_unlock:
 	aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	return err;
 }
@@ -406,7 +408,7 @@ int aufs_rmdir(struct inode *dir, struct dentry *dentry)
 	struct inode *inode;
 	struct dentry *parent, *wh_dentry, *h_dentry;
 	struct au_whtmp_rmdir *args;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct au_pin pin;
@@ -504,7 +506,7 @@ out_parent:
 out_unlock:
 	aufs_read_unlock(dentry, AuLock_DW);
 out_free:
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	AuTraceErr(err);
 	return err;

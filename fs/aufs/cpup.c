@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -336,9 +337,11 @@ int au_copy_file(struct file *dst, struct file *src, loff_t len)
 	unsigned long blksize;
 	unsigned char do_kfree;
 	char *buf;
+	struct super_block *h_sb;
 
 	err = -ENOMEM;
-	blksize = dst->f_path.dentry->d_sb->s_blocksize;
+	h_sb = file_inode(dst)->i_sb;
+	blksize = h_sb->s_blocksize;
 	if (!blksize || PAGE_SIZE < blksize)
 		blksize = PAGE_SIZE;
 	AuDbg("blksize %lu\n", blksize);
@@ -356,9 +359,10 @@ int au_copy_file(struct file *dst, struct file *src, loff_t len)
 	src->f_pos = 0;
 	dst->f_pos = 0;
 	err = au_do_copy_file(dst, src, len, buf, blksize);
-	if (do_kfree)
-		kfree(buf);
-	else
+	if (do_kfree) {
+		AuDebugOn(!au_kfree_do_sz_test(blksize));
+		au_kfree_do_rcu(buf);
+	} else
 		free_page((unsigned long)buf);
 
 out:
@@ -380,7 +384,7 @@ static int au_do_copy(struct file *dst, struct file *src, loff_t len)
 	else {
 		inode_unlock_shared(h_src_inode);
 		err = au_copy_file(dst, src, len);
-		vfsub_inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 	}
 
 	return err;
@@ -389,26 +393,36 @@ static int au_do_copy(struct file *dst, struct file *src, loff_t len)
 static int au_clone_or_copy(struct file *dst, struct file *src, loff_t len)
 {
 	int err;
+	loff_t lo;
 	struct super_block *h_src_sb;
 	struct inode *h_src_inode;
 
 	h_src_inode = file_inode(src);
 	h_src_sb = h_src_inode->i_sb;
 	if (h_src_sb != file_inode(dst)->i_sb
-	    || !dst->f_op->clone_file_range) {
+	    || !dst->f_op->remap_file_range) {
 		err = au_do_copy(dst, src, len);
 		goto out;
 	}
 
 	if (!au_test_nfs(h_src_sb)) {
 		inode_unlock_shared(h_src_inode);
-		err = vfsub_clone_file_range(src, dst, len);
-		vfsub_inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
+		lo = vfsub_clone_file_range(src, dst, len);
+		inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 	} else
-		err = vfsub_clone_file_range(src, dst, len);
-	/* older XFS has a condition in cloning */
-	if (unlikely(err != -EOPNOTSUPP))
+		lo = vfsub_clone_file_range(src, dst, len);
+	if (lo == len) {
+		err = 0;
+		goto out; /* success */
+	} else if (lo >= 0)
+		/* todo: possible? */
+		/* paritially succeeded */
+		AuDbg("lo %lld, len %lld. Retrying.\n", lo, len);
+	else if (lo != -EOPNOTSUPP) {
+		/* older XFS has a condition in cloning */
+		err = lo;
 		goto out;
+	}
 
 	/* the backend fs on NFS may not support cloning */
 	err = au_do_copy(dst, src, len);
@@ -432,20 +446,18 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		struct dentry *dentry;
 		int force_wr;
 		struct file *file;
-		void *label;
 	} *f, file[] = {
 		{
 			.bindex = cpg->bsrc,
 			.flags = O_RDONLY | O_NOATIME | O_LARGEFILE,
-			.label = &&out
 		},
 		{
 			.bindex = cpg->bdst,
 			.flags = O_WRONLY | O_NOATIME | O_LARGEFILE,
 			.force_wr = !!au_ftest_cpup(cpg->flags, RWDST),
-			.label = &&out_src
 		}
 	};
+	struct au_branch *br;
 	struct super_block *sb, *h_src_sb;
 	struct inode *h_src_inode;
 	struct task_struct *tsk = current;
@@ -457,9 +469,13 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		f->dentry = au_h_dptr(cpg->dentry, f->bindex);
 		f->file = au_h_open(cpg->dentry, f->bindex, f->flags,
 				    /*file*/NULL, f->force_wr);
-		err = PTR_ERR(f->file);
-		if (IS_ERR(f->file))
-			goto *f->label;
+		if (IS_ERR(f->file)) {
+			err = PTR_ERR(f->file);
+			if (i == SRC)
+				goto out;
+			else
+				goto out_src;
+		}
 	}
 
 	/* try stopping to update while we copyup */
@@ -473,7 +489,7 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 	if (tsk->flags & PF_KTHREAD)
 		__fput_sync(file[DST].file);
 	else {
-		/* it happend actually */
+		/* it happened actually */
 		fput(file[DST].file);
 		/*
 		 * too bad.
@@ -483,11 +499,13 @@ static int au_cp_regular(struct au_cp_generic *cpg)
 		task_work_run();
 		flush_delayed_fput();
 	}
-	au_sbr_put(sb, file[DST].bindex);
+	br = au_sbr(sb, file[DST].bindex);
+	au_lcnt_dec(&br->br_nfiles);
 
 out_src:
 	fput(file[SRC].file);
-	au_sbr_put(sb, file[SRC].bindex);
+	br = au_sbr(sb, file[SRC].bindex);
+	au_lcnt_dec(&br->br_nfiles);
 out:
 	return err;
 }
@@ -507,7 +525,7 @@ static int au_do_cpup_regular(struct au_cp_generic *cpg,
 		cpg->len = l;
 	if (cpg->len) {
 		/* try stopping to update while we are referencing */
-		vfsub_inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 		au_pin_hdir_unlock(cpg->pin);
 
 		h_path.dentry = au_h_dptr(cpg->dentry, cpg->bsrc);
@@ -518,8 +536,7 @@ static int au_do_cpup_regular(struct au_cp_generic *cpg,
 		else {
 			inode_unlock_shared(h_src_inode);
 			err = vfsub_getattr(&h_path, &h_src_attr->st);
-			vfsub_inode_lock_shared_nested(h_src_inode,
-						       AuLsc_I_CHILD);
+			inode_lock_shared_nested(h_src_inode, AuLsc_I_CHILD);
 		}
 		if (unlikely(err)) {
 			inode_unlock_shared(h_src_inode);
@@ -620,7 +637,7 @@ static int au_do_cpup_dir(struct au_cp_generic *cpg, struct dentry *dst_parent,
 
 	/*
 	 * strange behaviour from the users view,
-	 * particularry setattr case
+	 * particularly setattr case
 	 */
 	dir = d_inode(dst_parent);
 	if (au_ibtop(dir) == cpg->bdst)
@@ -676,8 +693,7 @@ int cpup_entry(struct au_cp_generic *cpg, struct dentry *dst_parent,
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		isreg = 1;
-		err = vfsub_create(h_dir, &h_path, S_IRUSR | S_IWUSR,
-				   /*want_excl*/true);
+		err = vfsub_create(h_dir, &h_path, 0600, /*want_excl*/true);
 		if (!err)
 			err = au_do_cpup_regular(cpg, h_src_attr);
 		break;
@@ -782,7 +798,7 @@ out:
  * in link/rename cases, @dst_parent may be different from the real one.
  * basic->bsrc can be larger than basic->bdst.
  * aufs doesn't touch the credential so
- * security_inode_copy_up{,_xattr}() are unnecrssary.
+ * security_inode_copy_up{,_xattr}() are unnecessary.
  */
 static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 {
@@ -793,7 +809,7 @@ static int au_cpup_single(struct au_cp_generic *cpg, struct dentry *dst_parent)
 	struct inode *dst_inode, *h_dir, *inode, *delegated, *src_inode;
 	struct super_block *sb;
 	struct au_branch *br;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct au_dtime dt;
 		struct path h_path;
@@ -949,7 +965,7 @@ out_rev:
 	}
 out_parent:
 	dput(dst_parent);
-	kfree(a);
+	au_kfree_rcu(a);
 out:
 	return err;
 }

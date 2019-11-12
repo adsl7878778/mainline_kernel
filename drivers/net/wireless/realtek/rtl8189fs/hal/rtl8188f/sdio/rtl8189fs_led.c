@@ -100,7 +100,7 @@ rtl8188fs_InitSwLeds(
 
 	pledpriv->SwLedOn = SwLedOn_8188FS;
 	pledpriv->SwLedOff = SwLedOff_8188FS;
-	
+
 	InitLed871x(padapter, &(pledpriv->SwLed0), LED_PIN_LED0);
 
 	InitLed871x(padapter,&(pledpriv->SwLed1), LED_PIN_LED1);

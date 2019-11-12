@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +20,7 @@
  * debug print functions
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /* Returns 0, or -errno.  arg is in kp->arg. */
@@ -53,7 +55,7 @@ static struct kernel_param_ops param_ops_atomic_t = {
 
 atomic_t aufs_debug = ATOMIC_INIT(0);
 MODULE_PARM_DESC(debug, "debug print");
-module_param_named(debug, aufs_debug, atomic_t, S_IRUGO | S_IWUSR | S_IWGRP);
+module_param_named(debug, aufs_debug, atomic_t, 0664);
 
 DEFINE_MUTEX(au_dbg_mtx);	/* just to serialize the dbg msgs */
 char *au_plevel = KERN_DEBUG;
@@ -95,7 +97,7 @@ void au_dpri_vdir(struct au_vdir *vdir)
 		return;
 	}
 
-	dpri("deblk %u, nblk %lu, deblk %p, last{%lu, %p}, ver %lu\n",
+	dpri("deblk %u, nblk %lu, deblk %p, last{%lu, %p}, ver %llu\n",
 	     vdir->vd_deblk_sz, vdir->vd_nblk, vdir->vd_deblk,
 	     vdir->vd_last.ul, vdir->vd_last.p.deblk, vdir->vd_version);
 	for (ul = 0; ul < vdir->vd_nblk; ul++) {
@@ -130,9 +132,9 @@ static int do_pri_inode(aufs_bindex_t bindex, struct inode *inode, int hn,
 	     inode->i_ino, inode->i_sb ? au_sbtype(inode->i_sb) : "??",
 	     atomic_read(&inode->i_count), inode->i_nlink, inode->i_mode,
 	     i_size_read(inode), (unsigned long long)inode->i_blocks,
-	     hn, (long long)timespec_to_ns(&inode->i_ctime) & 0x0ffff,
+	     hn, (long long)timespec64_to_ns(&inode->i_ctime) & 0x0ffff,
 	     inode->i_mapping ? inode->i_mapping->nrpages : 0,
-	     inode->i_state, inode->i_flags, inode->i_version,
+	     inode->i_state, inode->i_flags, inode_peek_iversion(inode),
 	     inode->i_generation,
 	     l ? ", wh " : "", l, n);
 	return 0;
@@ -299,13 +301,14 @@ static int do_pri_br(aufs_bindex_t bindex, struct au_branch *br)
 	if (!sb || IS_ERR(sb))
 		goto out;
 
-	dpri("s%d: {perm 0x%x, id %d, cnt %lld, wbr %p}, "
+	dpri("s%d: {perm 0x%x, id %d, wbr %p}, "
 	     "%s, dev 0x%02x%02x, flags 0x%lx, cnt %d, active %d, "
 	     "xino %d\n",
-	     bindex, br->br_perm, br->br_id, au_br_count(br),
-	     br->br_wbr, au_sbtype(sb), MAJOR(sb->s_dev), MINOR(sb->s_dev),
+	     bindex, br->br_perm, br->br_id, br->br_wbr,
+	     au_sbtype(sb), MAJOR(sb->s_dev), MINOR(sb->s_dev),
 	     sb->s_flags, sb->s_count,
-	     atomic_read(&sb->s_active), !!br->br_xino.xi_file);
+	     atomic_read(&sb->s_active),
+	     !!au_xino_file(br->br_xino, /*idx*/-1));
 	return 0;
 
 out:
@@ -318,7 +321,7 @@ void au_dpri_sb(struct super_block *sb)
 	struct au_sbinfo *sbinfo;
 	aufs_bindex_t bindex;
 	int err;
-	/* to reuduce stack size */
+	/* to reduce stack size */
 	struct {
 		struct vfsmount mnt;
 		struct au_branch fake;
@@ -333,10 +336,8 @@ void au_dpri_sb(struct super_block *sb)
 
 	a->mnt.mnt_sb = sb;
 	a->fake.br_path.mnt = &a->mnt;
-	au_br_count_init(&a->fake);
 	err = do_pri_br(-1, &a->fake);
-	au_br_count_fin(&a->fake);
-	kfree(a);
+	au_kfree_rcu(a);
 	dpri("dev 0x%x\n", sb->s_dev);
 	if (err || !au_test_aufs(sb))
 		return;

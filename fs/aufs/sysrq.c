@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +17,7 @@
  */
 
 /*
- * magic sysrq hanlder
+ * magic sysrq handler
  */
 
 /* #include <linux/sysrq.h> */
@@ -110,7 +111,7 @@ static void sysrq_sb(struct super_block *sb)
 
 /* module parameter */
 static char *aufs_sysrq_key = "a";
-module_param_named(sysrq, aufs_sysrq_key, charp, S_IRUGO);
+module_param_named(sysrq, aufs_sysrq_key, charp, 0444);
 MODULE_PARM_DESC(sysrq, "MagicSysRq key for " AUFS_NAME);
 
 static void au_sysrq(int key __maybe_unused)

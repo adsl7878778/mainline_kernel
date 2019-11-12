@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +20,7 @@
  * superblock private data
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 /*
@@ -35,20 +37,23 @@ void au_si_free(struct kobject *kobj)
 		AuDebugOn(!hlist_bl_empty(sbinfo->si_plink + i));
 	AuDebugOn(atomic_read(&sbinfo->si_nowait.nw_len));
 
-	AuDebugOn(percpu_counter_sum(&sbinfo->si_ninodes));
-	percpu_counter_destroy(&sbinfo->si_ninodes);
-	AuDebugOn(percpu_counter_sum(&sbinfo->si_nfiles));
-	percpu_counter_destroy(&sbinfo->si_nfiles);
+	AuLCntZero(au_lcnt_read(&sbinfo->si_ninodes, /*do_rev*/0));
+	au_lcnt_fin(&sbinfo->si_ninodes, /*do_sync*/0);
+	AuLCntZero(au_lcnt_read(&sbinfo->si_nfiles, /*do_rev*/0));
+	au_lcnt_fin(&sbinfo->si_nfiles, /*do_sync*/0);
 
+	dbgaufs_si_fin(sbinfo);
 	au_rw_write_lock(&sbinfo->si_rwsem);
 	au_br_free(sbinfo);
 	au_rw_write_unlock(&sbinfo->si_rwsem);
 
-	kfree(sbinfo->si_branch);
+	au_kfree_try_rcu(sbinfo->si_branch);
 	mutex_destroy(&sbinfo->si_xib_mtx);
 	AuRwDestroy(&sbinfo->si_rwsem);
 
-	kfree(sbinfo);
+	au_lcnt_wait_for_fin(&sbinfo->si_ninodes);
+	/* si_nfiles is waited too */
+	au_kfree_rcu(sbinfo);
 }
 
 int au_si_alloc(struct super_block *sb)
@@ -67,14 +72,20 @@ int au_si_alloc(struct super_block *sb)
 		goto out_sbinfo;
 
 	err = sysaufs_si_init(sbinfo);
+	if (!err) {
+		dbgaufs_si_null(sbinfo);
+		err = dbgaufs_si_init(sbinfo);
+		if (unlikely(err))
+			kobject_put(&sbinfo->si_kobj);
+	}
 	if (unlikely(err))
 		goto out_br;
 
 	au_nwt_init(&sbinfo->si_nowait);
 	au_rw_init_wlock(&sbinfo->si_rwsem);
 
-	percpu_counter_init(&sbinfo->si_ninodes, 0, GFP_NOFS);
-	percpu_counter_init(&sbinfo->si_nfiles, 0, GFP_NOFS);
+	au_lcnt_init(&sbinfo->si_ninodes, /*release*/NULL);
+	au_lcnt_init(&sbinfo->si_nfiles, /*release*/NULL);
 
 	sbinfo->si_bbot = -1;
 	sbinfo->si_last_br_id = AUFS_BRANCH_MAX / 2;
@@ -92,7 +103,6 @@ int au_si_alloc(struct super_block *sb)
 	sbinfo->si_xino_expire
 		= msecs_to_jiffies(AUFS_XINO_DEF_SEC * MSEC_PER_SEC);
 	mutex_init(&sbinfo->si_xib_mtx);
-	sbinfo->si_xino_brid = -1;
 	/* leave si_xib_last_pindex and si_xib_next_bit */
 
 	INIT_HLIST_BL_HEAD(&sbinfo->si_aopen);
@@ -119,9 +129,9 @@ int au_si_alloc(struct super_block *sb)
 	return 0; /* success */
 
 out_br:
-	kfree(sbinfo->si_branch);
+	au_kfree_try_rcu(sbinfo->si_branch);
 out_sbinfo:
-	kfree(sbinfo);
+	au_kfree_rcu(sbinfo);
 out:
 	return err;
 }
@@ -160,7 +170,7 @@ unsigned int au_sigen_inc(struct super_block *sb)
 	au_update_digen(sb->s_root);
 	inode = d_inode(sb->s_root);
 	au_update_iigen(inode, /*half*/0);
-	inode->i_version++;
+	inode_inc_iversion(inode);
 	return gen;
 }
 

@@ -1,18 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *  bxt-sst.c - DSP library functions for BXT platform
  *
  *  Copyright (C) 2015-16 Intel Corp
  *  Author:Rafal Redzimski <rafal.f.redzimski@intel.com>
  *	   Jeeja KP <jeeja.kp@intel.com>
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
- *
- *  This program is distributed in the hope that it will be useful, but
- *  WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *  General Public License for more details.
  */
 
 #include <linux/module.h>
@@ -595,7 +587,7 @@ int bxt_sst_dsp_init(struct device *dev, void __iomem *mmio_base, int irq,
 	INIT_DELAYED_WORK(&skl->d0i3.work, bxt_set_dsp_D0i3);
 	skl->d0i3.state = SKL_DSP_D0I3_NONE;
 
-	return 0;
+	return skl_dsp_acquire_irq(sst);
 }
 EXPORT_SYMBOL_GPL(bxt_sst_dsp_init);
 

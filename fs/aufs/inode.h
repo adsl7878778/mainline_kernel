@@ -1,5 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +37,7 @@ struct au_hnotify {
 	struct fsnotify_mark		hn_mark;
 #endif
 	struct inode		*hn_aufs_inode;	/* no get/put */
+	struct rcu_head		rcu;
 #endif
 } ____cacheline_aligned_in_smp;
 
@@ -76,9 +78,10 @@ struct au_iinfo {
 };
 
 struct au_icntnr {
-	struct au_iinfo iinfo;
-	struct inode vfs_inode;
-	struct hlist_bl_node plink;
+	struct au_iinfo		iinfo;
+	struct inode		vfs_inode;
+	struct hlist_bl_node	plink;
+	struct rcu_head		rcu;
 } ____cacheline_aligned_in_smp;
 
 /* au_pin flags */
@@ -610,7 +613,7 @@ void au_hn_free(struct au_hinode *hinode);
 void au_hn_ctl(struct au_hinode *hinode, int do_set);
 void au_hn_reset(struct inode *inode, unsigned int flags);
 int au_hnotify(struct inode *h_dir, struct au_hnotify *hnotify, u32 mask,
-	       struct qstr *h_child_qstr, struct inode *h_child_inode);
+	       const struct qstr *h_child_qstr, struct inode *h_child_inode);
 int au_hnotify_reset_br(unsigned int udba, struct au_branch *br, int perm);
 int au_hnotify_init_br(struct au_branch *br, int perm);
 void au_hnotify_fin_br(struct au_branch *br);
@@ -680,7 +683,7 @@ static inline void au_hn_inode_lock_nested(struct au_hinode *hdir,
 static inline void au_hn_inode_lock_shared_nested(struct au_hinode *hdir,
 						  unsigned int sc)
 {
-	vfsub_inode_lock_shared_nested(hdir->hi_inode, sc);
+	inode_lock_shared_nested(hdir->hi_inode, sc);
 	au_hn_suspend(hdir);
 }
 #endif

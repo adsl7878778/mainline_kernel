@@ -574,7 +574,11 @@ int rtw_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 			goto exit;
 	}
 #ifdef CONFIG_COMPAT
+#ifdef in_compat_syscall
+	if (in_compat_syscall()) {
+#else
 	if (is_compat_task()) {
+#endif
 		/* User space is 32-bit, use compat ioctl */
 		compat_android_wifi_priv_cmd compat_priv_cmd;
 
@@ -604,7 +608,7 @@ int rtw_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		goto exit;
 	}
 
-	if (!access_ok(VERIFY_READ, priv_cmd.buf, priv_cmd.total_len)){
+	if (!access_ok(priv_cmd.buf, priv_cmd.total_len)){
 	 	DBG_871X("%s: failed to access memory\n", __FUNCTION__);
 		ret = -EFAULT;
 		goto exit;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * skl-sst-dsp.c - SKL SST library generic function
  *
@@ -5,15 +6,6 @@
  * Author:Rafal Redzimski <rafal.f.redzimski@intel.com>
  *	Jeeja KP <jeeja.kp@intel.com>
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as version 2, as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
  */
 #include <sound/pcm.h>
 
@@ -435,16 +427,22 @@ struct sst_dsp *skl_dsp_ctx_init(struct device *dev,
 			return NULL;
 	}
 
+	return sst;
+}
+
+int skl_dsp_acquire_irq(struct sst_dsp *sst)
+{
+	struct sst_dsp_device *sst_dev = sst->sst_dev;
+	int ret;
+
 	/* Register the ISR */
 	ret = request_threaded_irq(sst->irq, sst->ops->irq_handler,
 		sst_dev->thread, IRQF_SHARED, "AudioDSP", sst);
-	if (ret) {
+	if (ret)
 		dev_err(sst->dev, "unable to grab threaded IRQ %d, disabling device\n",
 			       sst->irq);
-		return NULL;
-	}
 
-	return sst;
+	return ret;
 }
 
 void skl_dsp_free(struct sst_dsp *dsp)

@@ -1,7 +1,7 @@
 config WLAN_VENDOR_XRADIO
        tristate "XRADIO WLAN support"
        depends on MAC80211
-       default n
+       default m
        help
 
          This is an experimental driver for the XRADIO chip-set.

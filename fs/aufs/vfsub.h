@@ -1,5 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +34,7 @@
 /* copied from linux/fs/internal.h */
 /* todo: BAD approach!! */
 extern void __mnt_drop_write(struct vfsmount *);
-extern int open_check_o_direct(struct file *f);
+extern struct file *alloc_empty_file(int, const struct cred *);
 
 /* ---------------------------------------------------------------------- */
 
@@ -53,13 +54,6 @@ enum {
 /* to debug easier, do not make them inlined functions */
 #define MtxMustLock(mtx)	AuDebugOn(!mutex_is_locked(mtx))
 #define IMustLock(i)		AuDebugOn(!inode_is_locked(i))
-
-/* why VFS doesn't define it? */
-static inline
-void vfsub_inode_lock_shared_nested(struct inode *inode, unsigned int sc)
-{
-	down_read_nested(&inode->i_rwsem, sc);
-}
 
 /* ---------------------------------------------------------------------- */
 
@@ -97,15 +91,15 @@ int vfsub_sync_filesystem(struct super_block *h_sb, int wait);
 int vfsub_update_h_iattr(struct path *h_path, int *did);
 struct file *vfsub_dentry_open(struct path *path, int flags);
 struct file *vfsub_filp_open(const char *path, int oflags, int mode);
-struct vfsub_aopen_args {
-	struct file	*file;
-	unsigned int	open_flag;
-	umode_t		create_mode;
-	int		*opened;
-};
 struct au_branch;
+struct vfsub_aopen_args {
+	struct file		*file;
+	unsigned int		open_flag;
+	umode_t			create_mode;
+	struct au_branch	*br;
+};
 int vfsub_atomic_open(struct inode *dir, struct dentry *dentry,
-		      struct vfsub_aopen_args *args, struct au_branch *br);
+		      struct vfsub_aopen_args *args);
 int vfsub_kern_path(const char *name, unsigned int flags, struct path *path);
 
 struct dentry *vfsub_lookup_one_len_unlocked(const char *name,
@@ -232,8 +226,8 @@ static inline void vfsub_touch_atime(struct vfsmount *h_mnt,
 }
 #endif
 
-static inline int vfsub_update_time(struct inode *h_inode, struct timespec *ts,
-				    int flags)
+static inline int vfsub_update_time(struct inode *h_inode,
+				    struct timespec64 *ts, int flags)
 {
 	return update_time(h_inode, ts, flags);
 	/* no vfsub_update_h_iattr() since we don't have struct path */
@@ -277,13 +271,13 @@ int vfsub_fsync(struct file *file, struct path *path, int datasync);
  * re-use branch fs's ioctl(FICLONE) while aufs itself doesn't support such
  * ioctl.
  */
-static inline int vfsub_clone_file_range(struct file *src, struct file *dst,
-					 u64 len)
+static inline loff_t vfsub_clone_file_range(struct file *src, struct file *dst,
+					    loff_t len)
 {
-	int err;
+	loff_t err;
 
 	lockdep_off();
-	err = vfs_clone_file_range(src, 0, dst, 0, len);
+	err = vfs_clone_file_range(src, 0, dst, 0, len, /*remap_flags*/0);
 	lockdep_on();
 
 	return err;

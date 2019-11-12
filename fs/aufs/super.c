@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +20,7 @@
  * mount and super_block operations
  */
 
+#include <linux/iversion.h>
 #include <linux/mm.h>
 #include <linux/seq_file.h>
 #include <linux/statfs.h>
@@ -35,25 +37,22 @@ static struct inode *aufs_alloc_inode(struct super_block *sb __maybe_unused)
 	c = au_cache_alloc_icntnr();
 	if (c) {
 		au_icntnr_init(c);
-		c->vfs_inode.i_version = 1; /* sigen(sb); */
+		inode_set_iversion(&c->vfs_inode, 1); /* sigen(sb); */
 		c->iinfo.ii_hinode = NULL;
 		return &c->vfs_inode;
 	}
 	return NULL;
 }
 
-static void aufs_destroy_inode_cb(struct rcu_head *head)
-{
-	struct inode *inode = container_of(head, struct inode, i_rcu);
-
-	au_cache_free_icntnr(container_of(inode, struct au_icntnr, vfs_inode));
-}
-
 static void aufs_destroy_inode(struct inode *inode)
 {
 	if (!au_is_bad_inode(inode))
 		au_iinfo_fin(inode);
-	call_rcu(&inode->i_rcu, aufs_destroy_inode_cb);
+}
+
+static void aufs_free_inode(struct inode *inode)
+{
+	au_cache_free_icntnr(container_of(inode, struct au_icntnr, vfs_inode));
 }
 
 struct inode *au_iget_locked(struct super_block *sb, ino_t ino)
@@ -73,7 +72,7 @@ struct inode *au_iget_locked(struct super_block *sb, ino_t ino)
 	if (!err)
 		err = au_iinfo_init(inode);
 	if (!err)
-		inode->i_version++;
+		inode_inc_iversion(inode);
 	else {
 		iget_failed(inode);
 		inode = ERR_PTR(err);
@@ -186,6 +185,7 @@ static int au_show_xino(struct seq_file *seq, struct super_block *sb)
 	struct qstr *name;
 	struct file *f;
 	struct dentry *d, *h_root;
+	struct au_branch *br;
 
 	AuRwMustAnyLock(&sbinfo->si_rwsem);
 
@@ -196,11 +196,12 @@ static int au_show_xino(struct seq_file *seq, struct super_block *sb)
 
 	/* stop printing the default xino path on the first writable branch */
 	h_root = NULL;
-	brid = au_xino_brid(sb);
-	if (brid >= 0) {
-		bindex = au_br_index(sb, brid);
-		h_root = au_hdentry(au_di(sb->s_root), bindex)->hd_dentry;
+	bindex = au_xi_root(sb, f->f_path.dentry);
+	if (bindex >= 0) {
+		br = au_sbr_sb(sb, bindex);
+		h_root = au_br_dentry(br);
 	}
+
 	d = f->f_path.dentry;
 	name = &d->d_name;
 	/* safe ->d_parent because the file is unlinked */
@@ -243,8 +244,12 @@ static int aufs_show_options(struct seq_file *m, struct dentry *dentry)
 } while (0)
 
 	sb = dentry->d_sb;
-	if (sb->s_flags & MS_POSIXACL)
+	if (sb->s_flags & SB_POSIXACL)
 		seq_puts(m, ",acl");
+#if 0
+	if (sb->s_flags & SB_I_VERSION)
+		seq_puts(m, ",i_version");
+#endif
 
 	/* lock free root dinfo */
 	si_noflush_read_lock(sb);
@@ -466,11 +471,8 @@ static void aufs_put_super(struct super_block *sb)
 	struct au_sbinfo *sbinfo;
 
 	sbinfo = au_sbi(sb);
-	if (!sbinfo)
-		return;
-
-	dbgaufs_si_fin(sbinfo);
-	kobject_put(&sbinfo->si_kobj);
+	if (sbinfo)
+		kobject_put(&sbinfo->si_kobj);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -541,7 +543,10 @@ static unsigned long long au_iarray_cb(struct super_block *sb, void *a,
 
 struct inode **au_iarray_alloc(struct super_block *sb, unsigned long long *max)
 {
-	*max = au_ninodes(sb);
+	struct au_sbinfo *sbi;
+
+	sbi = au_sbi(sb);
+	*max = au_lcnt_read(&sbi->si_ninodes, /*do_rev*/1);
 	return au_array_alloc(max, au_iarray_cb, sb, &sb->s_inodes);
 }
 
@@ -739,7 +744,7 @@ static void au_remount_refresh(struct super_block *sb, unsigned int do_idop)
 			AuDebugOn(sbi->si_iop_array == aufs_iop);
 			sbi->si_iop_array = aufs_iop;
 		}
-		pr_info("reset to %pf and %pf\n",
+		pr_info("reset to %ps and %ps\n",
 			sb->s_d_op, sbi->si_iop_array);
 	}
 
@@ -845,6 +850,7 @@ out:
 static const struct super_operations aufs_sop = {
 	.alloc_inode	= aufs_alloc_inode,
 	.destroy_inode	= aufs_destroy_inode,
+	.free_inode	= aufs_free_inode,
 	/* always deleting, no clearing */
 	.drop_inode	= generic_delete_inode,
 	.show_options	= aufs_show_options,
@@ -923,7 +929,8 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	sbinfo = au_sbi(sb);
 
 	/* all timestamps always follow the ones on the branch */
-	sb->s_flags |= MS_NOATIME | MS_NODIRATIME;
+	sb->s_flags |= SB_NOATIME | SB_NODIRATIME;
+	sb->s_flags |= SB_I_VERSION; /* do we really need this? */
 	sb->s_op = &aufs_sop;
 	sb->s_d_op = &aufs_dop;
 	sb->s_magic = AUFS_SUPER_MAGIC;
@@ -958,7 +965,7 @@ static int aufs_fill_super(struct super_block *sb, void *raw_data,
 	au_opts_free(&opts);
 	if (!err && au_ftest_si(sbinfo, NO_DREVAL)) {
 		sb->s_d_op = &aufs_dop_noreval;
-		pr_info("%pf\n", sb->s_d_op);
+		pr_info("%ps\n", sb->s_d_op);
 		au_refresh_dop(root, /*force_reval*/0);
 		sbinfo->si_iop_array = aufs_iop_nogetattr;
 		au_refresh_iop(inode, /*force_getattr*/0);
@@ -972,7 +979,6 @@ out_root:
 	dput(root);
 	sb->s_root = NULL;
 out_info:
-	dbgaufs_si_fin(sbinfo);
 	kobject_put(&sbinfo->si_kobj);
 	sb->s_fs_info = NULL;
 out_opts:
@@ -991,7 +997,6 @@ static struct dentry *aufs_mount(struct file_system_type *fs_type, int flags,
 				 void *raw_data)
 {
 	struct dentry *root;
-	struct super_block *sb;
 
 	/* all timestamps always follow the ones on the branch */
 	/* mnt->mnt_flags |= MNT_NOATIME | MNT_NODIRATIME; */
@@ -999,11 +1004,7 @@ static struct dentry *aufs_mount(struct file_system_type *fs_type, int flags,
 	if (IS_ERR(root))
 		goto out;
 
-	sb = root->d_sb;
-	si_write_lock(sb, !AuLock_FLUSH);
-	sysaufs_brs_add(sb, 0);
-	si_write_unlock(sb);
-	au_sbilist_add(sb);
+	au_sbilist_add(root->d_sb);
 
 out:
 	return root;

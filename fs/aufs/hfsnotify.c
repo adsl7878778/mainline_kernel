@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,8 +62,7 @@ static int au_hfsn_alloc(struct au_hinode *hinode)
 	 * h_inode, so specify 1 to allow dups.
 	 */
 	lockdep_off();
-	err = fsnotify_add_mark(mark, hinode->hi_inode, /*mnt*/NULL,
-				/*allow_dups*/1);
+	err = fsnotify_add_inode_mark(mark, hinode->hi_inode, /*allow_dups*/1);
 	lockdep_on();
 
 	return err;
@@ -156,21 +156,19 @@ static void au_hfsn_free_group(struct fsnotify_group *group)
 	struct au_br_hfsnotify *hfsn = group->private;
 
 	/* AuDbg("here\n"); */
-	kfree(hfsn);
+	au_kfree_try_rcu(hfsn);
 }
 
 static int au_hfsn_handle_event(struct fsnotify_group *group,
 				struct inode *inode,
-				struct fsnotify_mark *inode_mark,
-				struct fsnotify_mark *vfsmount_mark,
 				u32 mask, const void *data, int data_type,
-				const unsigned char *file_name, u32 cookie,
+				const struct qstr *file_name, u32 cookie,
 				struct fsnotify_iter_info *iter_info)
 {
 	int err;
 	struct au_hnotify *hnotify;
 	struct inode *h_dir, *h_inode;
-	struct qstr h_child_qstr = QSTR_INIT(file_name, strlen(file_name));
+	struct fsnotify_mark *inode_mark;
 
 	AuDebugOn(data_type != FSNOTIFY_EVENT_INODE);
 
@@ -194,9 +192,10 @@ static int au_hfsn_handle_event(struct fsnotify_group *group,
 	au_debug_off();
 #endif
 
+	inode_mark = fsnotify_iter_inode_mark(iter_info);
 	AuDebugOn(!inode_mark);
 	hnotify = container_of(inode_mark, struct au_hnotify, hn_mark);
-	err = au_hnotify(h_dir, hnotify, mask, &h_child_qstr, h_inode);
+	err = au_hnotify(h_dir, hnotify, mask, file_name, h_inode);
 
 out:
 	return err;
@@ -252,7 +251,7 @@ static int au_hfsn_init_br(struct au_branch *br, int perm)
 	goto out; /* success */
 
 out_hfsn:
-	kfree(hfsn);
+	au_kfree_try_rcu(hfsn);
 out:
 	return err;
 }

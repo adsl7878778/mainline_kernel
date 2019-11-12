@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,7 +53,7 @@ int au_dpages_init(struct au_dcsub_pages *dpages, gfp_t gfp)
 	return 0; /* success */
 
 out_dpages:
-	kfree(dpages->dpages);
+	au_kfree_try_rcu(dpages->dpages);
 out:
 	return err;
 }
@@ -65,7 +66,7 @@ void au_dpages_free(struct au_dcsub_pages *dpages)
 	p = dpages->dpages;
 	for (i = 0; i < dpages->ndpage; i++)
 		au_dpage_free(p++);
-	kfree(dpages->dpages);
+	au_kfree_try_rcu(dpages->dpages);
 }
 
 static int au_dpages_append(struct au_dcsub_pages *dpages,
@@ -116,8 +117,7 @@ enum d_walk_ret {
 };
 
 extern void d_walk(struct dentry *parent, void *data,
-		   enum d_walk_ret (*enter)(void *, struct dentry *),
-		   void (*finish)(void *));
+		   enum d_walk_ret (*enter)(void *, struct dentry *));
 
 struct ac_dpages_arg {
 	int err;
@@ -157,7 +157,7 @@ int au_dcsub_pages(struct au_dcsub_pages *dpages, struct dentry *root,
 		.arg	= arg
 	};
 
-	d_walk(root, &args, au_call_dpages_append, NULL);
+	d_walk(root, &args, au_call_dpages_append);
 
 	return args.err;
 }

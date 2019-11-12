@@ -40,36 +40,37 @@
 VOID
 PHY_RF6052SetBandwidth8814A(
 	IN	PADAPTER				Adapter,
-	IN	CHANNEL_WIDTH		Bandwidth)	//20M or 40M
+	IN	enum channel_width		Bandwidth)	//20M or 40M
 {
-	switch (Bandwidth) {
+	switch(Bandwidth)
+	{
 		case CHANNEL_WIDTH_20:
 			/*RTW_INFO("PHY_RF6052SetBandwidth8814A(), set 20MHz\n");*/
-			PHY_SetRFReg(Adapter, RF_PATH_A, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
-			PHY_SetRFReg(Adapter, RF_PATH_B, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
-			PHY_SetRFReg(Adapter, RF_PATH_C, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
-			PHY_SetRFReg(Adapter, RF_PATH_D, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
+			phy_set_rf_reg(Adapter, RF_PATH_A, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
+			phy_set_rf_reg(Adapter, RF_PATH_B, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
+			phy_set_rf_reg(Adapter, RF_PATH_C, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
+			phy_set_rf_reg(Adapter, RF_PATH_D, RF_CHNLBW_Jaguar, BIT11|BIT10, 3);
 		break;
-
+			
 		case CHANNEL_WIDTH_40:
 			/*RTW_INFO("PHY_RF6052SetBandwidth8814A(), set 40MHz\n");*/
-			PHY_SetRFReg(Adapter, RF_PATH_A, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);
-			PHY_SetRFReg(Adapter, RF_PATH_B, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);
-			PHY_SetRFReg(Adapter, RF_PATH_C, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);
-			PHY_SetRFReg(Adapter, RF_PATH_D, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);
+			phy_set_rf_reg(Adapter, RF_PATH_A, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);	
+			phy_set_rf_reg(Adapter, RF_PATH_B, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);	
+			phy_set_rf_reg(Adapter, RF_PATH_C, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);	
+			phy_set_rf_reg(Adapter, RF_PATH_D, RF_CHNLBW_Jaguar, BIT11|BIT10, 1);			
 		break;
-
+		
 		case CHANNEL_WIDTH_80:
 			/*RTW_INFO("PHY_RF6052SetBandwidth8814A(), set 80MHz\n");*/
-			PHY_SetRFReg(Adapter, RF_PATH_A, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);
-			PHY_SetRFReg(Adapter, RF_PATH_B, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);
-			PHY_SetRFReg(Adapter, RF_PATH_C, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);
-			PHY_SetRFReg(Adapter, RF_PATH_D, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);
+			phy_set_rf_reg(Adapter, RF_PATH_A, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);	
+			phy_set_rf_reg(Adapter, RF_PATH_B, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);	
+			phy_set_rf_reg(Adapter, RF_PATH_C, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);	
+			phy_set_rf_reg(Adapter, RF_PATH_D, RF_CHNLBW_Jaguar, BIT11|BIT10, 0);
 		break;
-
+			
 		default:
 			RTW_INFO("PHY_RF6052SetBandwidth8814A(): unknown Bandwidth: %#X\n",Bandwidth );
-			break;
+			break;			
 	}
 }
 
@@ -82,67 +83,57 @@ phy_RF6052_Config_ParaFile_8814A(
 	u8					eRFPath;
 	int					rtStatus = _SUCCESS;
 	HAL_DATA_TYPE		*pHalData = GET_HAL_DATA(Adapter);
-	static char			sz8814RadioAFile[] = PHY_FILE_RADIO_A;
-	static char			sz8814RadioBFile[] = PHY_FILE_RADIO_B;
-	static char			sz8814RadioCFile[] = PHY_FILE_RADIO_C;
-	static char			sz8814RadioDFile[] = PHY_FILE_RADIO_D;
-	static char 		sz8814TxPwrTrack[] = PHY_FILE_TXPWR_TRACK;
+//	static char			sz8814RadioAFile[] = PHY_FILE_RADIO_A;
+//	static char			sz8814RadioBFile[] = PHY_FILE_RADIO_B;
+//	static char			sz8814RadioCFile[] = PHY_FILE_RADIO_C;
+//	static char			sz8814RadioDFile[] = PHY_FILE_RADIO_D;
+//	static char 		sz8814TxPwrTrack[] = PHY_FILE_TXPWR_TRACK;
 	char				*pszRadioAFile = NULL, *pszRadioBFile = NULL, *pszRadioCFile = NULL, *pszRadioDFile = NULL, *pszTxPwrTrack = NULL;
 
 
-	pszRadioAFile = sz8814RadioAFile;
-	pszRadioBFile = sz8814RadioBFile;
-	pszRadioCFile = sz8814RadioCFile;
-	pszRadioDFile = sz8814RadioDFile;
-	pszTxPwrTrack = sz8814TxPwrTrack;
+//	pszRadioAFile = sz8814RadioAFile;
+//	pszRadioBFile = sz8814RadioBFile;
+//	pszRadioCFile = sz8814RadioCFile;
+//	pszRadioDFile = sz8814RadioDFile;
+//	pszTxPwrTrack = sz8814TxPwrTrack;
 
 	//3//-----------------------------------------------------------------
 	//3// <2> Initialize RF
 	//3//-----------------------------------------------------------------
 	//for(eRFPath = RF_PATH_A; eRFPath <pHalData->NumTotalRFPath; eRFPath++)
-	for (eRFPath = 0; eRFPath <pHalData->NumTotalRFPath; eRFPath++) {
+	for(eRFPath = 0; eRFPath <pHalData->NumTotalRFPath; eRFPath++)
+	{
 		/*----Initialize RF fom connfiguration file----*/
-		switch (eRFPath) {
+		switch(eRFPath)
+		{
 		case RF_PATH_A:
-#ifdef CONFIG_LOAD_PHY_PARA_FROM_FILE
-			if (PHY_ConfigRFWithParaFile(Adapter, pszRadioAFile, eRFPath) == _FAIL)
-#endif //CONFIG_LOAD_PHY_PARA_FROM_FILE
 			{
 #ifdef CONFIG_EMBEDDED_FWIMG
-				if (HAL_STATUS_FAILURE ==ODM_ConfigRFWithHeaderFile(&pHalData->odmpriv,CONFIG_RF_RADIO, (ODM_RF_RADIO_PATH_E)eRFPath))
+				if(HAL_STATUS_FAILURE ==odm_config_rf_with_header_file(&pHalData->odmpriv,CONFIG_RF_RADIO, (enum rf_path)eRFPath))
 					rtStatus = _FAIL;
 #endif //CONFIG_EMBEDDED_FWIMG
 			}
 			break;
 		case RF_PATH_B:
-#ifdef CONFIG_LOAD_PHY_PARA_FROM_FILE
-			if (PHY_ConfigRFWithParaFile(Adapter, pszRadioBFile, eRFPath) == _FAIL)
-#endif //CONFIG_LOAD_PHY_PARA_FROM_FILE
 			{
 #ifdef CONFIG_EMBEDDED_FWIMG
-				if (HAL_STATUS_FAILURE ==ODM_ConfigRFWithHeaderFile(&pHalData->odmpriv,CONFIG_RF_RADIO, (ODM_RF_RADIO_PATH_E)eRFPath))
+				if(HAL_STATUS_FAILURE ==odm_config_rf_with_header_file(&pHalData->odmpriv,CONFIG_RF_RADIO, (enum rf_path)eRFPath))
 					rtStatus = _FAIL;
 #endif //CONFIG_EMBEDDED_FWIMG
 			}
 			break;
 		case RF_PATH_C:
-#ifdef CONFIG_LOAD_PHY_PARA_FROM_FILE
-			if (PHY_ConfigRFWithParaFile(Adapter, pszRadioCFile, eRFPath) == _FAIL)
-#endif //CONFIG_LOAD_PHY_PARA_FROM_FILE
 			{
 #ifdef CONFIG_EMBEDDED_FWIMG
-				if (HAL_STATUS_FAILURE ==ODM_ConfigRFWithHeaderFile(&pHalData->odmpriv,CONFIG_RF_RADIO, (ODM_RF_RADIO_PATH_E)eRFPath))
+				if(HAL_STATUS_FAILURE ==odm_config_rf_with_header_file(&pHalData->odmpriv,CONFIG_RF_RADIO, (enum rf_path)eRFPath))
 					rtStatus = _FAIL;
 #endif //CONFIG_EMBEDDED_FWIMG
 			}
 			break;
 		case RF_PATH_D:
-#ifdef CONFIG_LOAD_PHY_PARA_FROM_FILE
-			if (PHY_ConfigRFWithParaFile(Adapter, pszRadioDFile, eRFPath) == _FAIL)
-#endif //CONFIG_LOAD_PHY_PARA_FROM_FILE
 			{
 #ifdef CONFIG_EMBEDDED_FWIMG
-				if(HAL_STATUS_FAILURE ==ODM_ConfigRFWithHeaderFile(&pHalData->odmpriv,CONFIG_RF_RADIO, (ODM_RF_RADIO_PATH_E)eRFPath))
+				if(HAL_STATUS_FAILURE ==odm_config_rf_with_header_file(&pHalData->odmpriv,CONFIG_RF_RADIO, (enum rf_path)eRFPath))
 					rtStatus = _FAIL;
 #endif //CONFIG_EMBEDDED_FWIMG
 			}
@@ -151,28 +142,25 @@ phy_RF6052_Config_ParaFile_8814A(
 			break;
 		}
 
-		if (rtStatus != _SUCCESS) {
+		if(rtStatus != _SUCCESS){
 			RTW_INFO("%s():Radio[%d] Fail!!", __FUNCTION__, eRFPath);
 			goto phy_RF6052_Config_ParaFile_Fail;
 		}
 
 	}
-
-	u4RegValue = PHY_QueryRFReg(Adapter, RF_PATH_A, RF_RCK1_Jaguar, bRFRegOffsetMask);
-	PHY_SetRFReg(Adapter, RF_PATH_B,  RF_RCK1_Jaguar, bRFRegOffsetMask, u4RegValue);
-	PHY_SetRFReg(Adapter, RF_PATH_C,  RF_RCK1_Jaguar, bRFRegOffsetMask, u4RegValue);
-	PHY_SetRFReg(Adapter, RF_PATH_D,  RF_RCK1_Jaguar, bRFRegOffsetMask, u4RegValue);
-
+	
+	u4RegValue = phy_query_rf_reg(Adapter, RF_PATH_A, RF_RCK1_Jaguar, bRFRegOffsetMask);
+	phy_set_rf_reg(Adapter, RF_PATH_B,  RF_RCK1_Jaguar, bRFRegOffsetMask, u4RegValue);
+	phy_set_rf_reg(Adapter, RF_PATH_C,  RF_RCK1_Jaguar, bRFRegOffsetMask, u4RegValue);
+	phy_set_rf_reg(Adapter, RF_PATH_D,  RF_RCK1_Jaguar, bRFRegOffsetMask, u4RegValue);
+	
 	//3 -----------------------------------------------------------------
-	//3 Configuration of Tx Power Tracking
+	//3 Configuration of Tx Power Tracking 
 	//3 -----------------------------------------------------------------
 
-#ifdef CONFIG_LOAD_PHY_PARA_FROM_FILE
-	if (PHY_ConfigRFWithTxPwrTrackParaFile(Adapter, pszTxPwrTrack) == _FAIL)
-#endif //CONFIG_LOAD_PHY_PARA_FROM_FILE
 	{
 #ifdef CONFIG_EMBEDDED_FWIMG
-		ODM_ConfigRFWithTxPwrTrackHeaderFile(&pHalData->odmpriv);
+		odm_config_rf_with_tx_pwr_track_header_file(&pHalData->odmpriv);
 #endif
 	}
 
@@ -181,6 +169,7 @@ phy_RF6052_Config_ParaFile_8814A(
 phy_RF6052_Config_ParaFile_Fail:
 	return rtStatus;
 }
+
 
 int
 PHY_RF6052_Config_8814A(
@@ -201,4 +190,6 @@ PHY_RF6052_Config_8814A(
 
 }
 
+
 /* End of HalRf6052.c */
+

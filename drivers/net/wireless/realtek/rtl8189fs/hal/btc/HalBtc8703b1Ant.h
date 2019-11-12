@@ -206,11 +206,11 @@ typedef struct _COEX_STA_8703B_1ANT{
 	u4Byte					nCRCOK_11g;
 	u4Byte					nCRCOK_11n;
 	u4Byte					nCRCOK_11nAgg;
-	
+
 	u4Byte					nCRCErr_CCK;
 	u4Byte					nCRCErr_11g;
 	u4Byte					nCRCErr_11n;
-	u4Byte					nCRCErr_11nAgg;	
+	u4Byte					nCRCErr_11nAgg;
 
 	BOOLEAN					bCCKLock;
 	BOOLEAN					bPreCCKLock;
@@ -250,7 +250,7 @@ u4Byte			nAntDet_ThresOffset;
 u4Byte			nRealCentFreq;
 s4Byte			nRealOffset;
 u4Byte			nRealSpan;
-	
+
 u4Byte			nPSDBandWidth;  //unit: Hz
 u4Byte			nPSDPoint;		//128/256/512/1024
 u4Byte			nPSDReport[1024];  //unit:dB (20logx), 0~255

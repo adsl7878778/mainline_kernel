@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2011-2017 Junjiro R. Okajima
+ * Copyright (C) 2011-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -169,10 +170,9 @@ void au_fhsm_wrote_all(struct super_block *sb, int force)
 
 /* ---------------------------------------------------------------------- */
 
-static unsigned int au_fhsm_poll(struct file *file,
-				 struct poll_table_struct *wait)
+static __poll_t au_fhsm_poll(struct file *file, struct poll_table_struct *wait)
 {
-	unsigned int mask;
+	__poll_t mask;
 	struct au_sbinfo *sbinfo;
 	struct au_fhsm *fhsm;
 
@@ -181,9 +181,10 @@ static unsigned int au_fhsm_poll(struct file *file,
 	fhsm = &sbinfo->si_fhsm;
 	poll_wait(file, &fhsm->fhsm_wqh, wait);
 	if (atomic_read(&fhsm->fhsm_readable))
-		mask = POLLIN /* | POLLRDNORM */;
+		mask = EPOLLIN /* | EPOLLRDNORM */;
 
-	AuTraceErr((int)mask);
+	if (!mask)
+		AuDbg("mask 0x%x\n", mask);
 	return mask;
 }
 
@@ -354,7 +355,7 @@ int au_fhsm_fd(struct super_block *sb, int oflags)
 	if (unlikely(fd < 0))
 		goto out_pid;
 
-	/* succeed reglardless 'fhsm' status */
+	/* succeed regardless 'fhsm' status */
 	kobject_get(&sbinfo->si_kobj);
 	si_noflush_read_lock(sb);
 	if (au_ftest_si(sbinfo, FHSM))

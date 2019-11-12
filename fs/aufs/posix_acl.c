@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2014-2017 Junjiro R. Okajima
+ * Copyright (C) 2014-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +35,7 @@ struct posix_acl *aufs_get_acl(struct inode *inode, int type)
 	sb = inode->i_sb;
 	si_read_lock(sb, AuLock_FLUSH);
 	ii_read_lock_child(inode);
-	if (!(sb->s_flags & MS_POSIXACL))
+	if (!(sb->s_flags & SB_POSIXACL))
 		goto out;
 
 	bindex = au_ibtop(inode);

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -181,7 +182,7 @@ out:
 	return err;
 }
 
-int au_xigen_set(struct super_block *sb, struct file *base)
+int au_xigen_set(struct super_block *sb, struct path *path)
 {
 	int err;
 	struct au_sbinfo *sbinfo;
@@ -190,7 +191,7 @@ int au_xigen_set(struct super_block *sb, struct file *base)
 	SiMustWriteLock(sb);
 
 	sbinfo = au_sbi(sb);
-	file = au_xino_create2(base, sbinfo->si_xigen);
+	file = au_xino_create2(sb, path, sbinfo->si_xigen);
 	err = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;
@@ -200,6 +201,7 @@ int au_xigen_set(struct super_block *sb, struct file *base)
 	sbinfo->si_xigen = file;
 
 out:
+	AuTraceErr(err);
 	return err;
 }
 
@@ -620,7 +622,7 @@ aufs_fh_to_dentry(struct super_block *sb, struct fid *fid, int fh_len,
 
 	/* is the parent dir cached? */
 	br = au_sbr(sb, nsi_lock.bindex);
-	au_br_get(br);
+	au_lcnt_inc(&br->br_nfiles);
 	dentry = decode_by_dir_ino(sb, ino, dir_ino, &nsi_lock);
 	if (IS_ERR(dentry))
 		goto out_unlock;
@@ -644,7 +646,7 @@ accept:
 	dentry = ERR_PTR(-ESTALE);
 out_unlock:
 	if (br)
-		au_br_put(br);
+		au_lcnt_dec(&br->br_nfiles);
 	si_read_unlock(sb);
 out:
 	AuTraceErrPtr(dentry);

@@ -19,7 +19,8 @@ struct cpuid_dep {
  * called from cpu hotplug. It shouldn't do anything in this case,
  * but it's difficult to tell that to the init reference checker.
  */
-const static struct cpuid_dep cpuid_deps[] = {
+static const struct cpuid_dep cpuid_deps[] = {
+	{ X86_FEATURE_FXSR,		X86_FEATURE_FPU	      },
 	{ X86_FEATURE_XSAVEOPT,		X86_FEATURE_XSAVE     },
 	{ X86_FEATURE_XSAVEC,		X86_FEATURE_XSAVE     },
 	{ X86_FEATURE_XSAVES,		X86_FEATURE_XSAVE     },
@@ -27,7 +28,11 @@ const static struct cpuid_dep cpuid_deps[] = {
 	{ X86_FEATURE_PKU,		X86_FEATURE_XSAVE     },
 	{ X86_FEATURE_MPX,		X86_FEATURE_XSAVE     },
 	{ X86_FEATURE_XGETBV1,		X86_FEATURE_XSAVE     },
+	{ X86_FEATURE_CMOV,		X86_FEATURE_FXSR      },
+	{ X86_FEATURE_MMX,		X86_FEATURE_FXSR      },
+	{ X86_FEATURE_MMXEXT,		X86_FEATURE_MMX       },
 	{ X86_FEATURE_FXSR_OPT,		X86_FEATURE_FXSR      },
+	{ X86_FEATURE_XSAVE,		X86_FEATURE_FXSR      },
 	{ X86_FEATURE_XMM,		X86_FEATURE_FXSR      },
 	{ X86_FEATURE_XMM2,		X86_FEATURE_XMM       },
 	{ X86_FEATURE_XMM3,		X86_FEATURE_XMM2      },
@@ -59,6 +64,10 @@ const static struct cpuid_dep cpuid_deps[] = {
 	{ X86_FEATURE_AVX512_4VNNIW,	X86_FEATURE_AVX512F   },
 	{ X86_FEATURE_AVX512_4FMAPS,	X86_FEATURE_AVX512F   },
 	{ X86_FEATURE_AVX512_VPOPCNTDQ, X86_FEATURE_AVX512F   },
+	{ X86_FEATURE_CQM_OCCUP_LLC,	X86_FEATURE_CQM_LLC   },
+	{ X86_FEATURE_CQM_MBM_TOTAL,	X86_FEATURE_CQM_LLC   },
+	{ X86_FEATURE_CQM_MBM_LOCAL,	X86_FEATURE_CQM_LLC   },
+	{ X86_FEATURE_AVX512_BF16,	X86_FEATURE_AVX512VL  },
 	{}
 };
 

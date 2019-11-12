@@ -137,7 +137,7 @@ static int PowerOnCheck(PADAPTER padapter)
 			if(index%16==0)
 				printk("0x%02x ",index);
 
-			printk("%02x ", rtw_read8(padapter, index)); 
+			printk("%02x ", rtw_read8(padapter, index));
 
 			if(index%16==15)
 				printk("\n");
@@ -200,8 +200,8 @@ _init_power_on:
 
 	//PowerOnCheck()
 	ret = PowerOnCheck(padapter);
-	pwron_chk_cnt++;	
-	if (_FAIL == ret ) {	
+	pwron_chk_cnt++;
+	if (_FAIL == ret ) {
 		if (pwron_chk_cnt > 1) {
 			DBG_871X("Failed to init Power On!\n");
 			return _FAIL;
@@ -674,7 +674,7 @@ void sdio_AggSettingRxUpdate(PADAPTER padapter)
 
 	valueRxAggCtrl |= RXDMA_AGG_MODE_EN;
 	valueRxAggCtrl |= ((aggBurstNum<<2) & 0x0C);
-	valueRxAggCtrl |= ((aggBurstSize<<4) & 0x30);  
+	valueRxAggCtrl |= ((aggBurstSize<<4) & 0x30);
 	rtw_write8(padapter, REG_RXDMA_MODE_CTRL_8188F, valueRxAggCtrl);//RxAggLowThresh = 4*1K
 }
 
@@ -937,14 +937,14 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 		//ser rpwm
 		val8 = rtw_read8(padapter, SDIO_LOCAL_BASE|SDIO_REG_HRPWM1);
 		val8 &= 0x80;
-		val8 += 0x80;	
-		val8 |= BIT(6);		
+		val8 += 0x80;
+		val8 |= BIT(6);
 		rtw_write8(padapter, SDIO_LOCAL_BASE|SDIO_REG_HRPWM1, val8);
-		
+
 		adapter_to_pwrctl(padapter)->tog = (val8 + 0x80) & 0x80;
-		
+
 		rtw_mdelay_os(5); //wait set rpwm already
-		
+
 		ret = HalPwrSeqCmdParsing(padapter, PWR_CUT_ALL_MSK, PWR_FAB_ALL_MSK, PWR_INTF_SDIO_MSK, rtl8188F_leave_swlps_flow);
 		if (ret == _FALSE) {
 			DBG_8192C("%s: run LPS flow in IPS fail!\n", __FUNCTION__);
@@ -975,22 +975,22 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 		//ser rpwm
 		val8 = rtw_read8(padapter, SDIO_LOCAL_BASE|SDIO_REG_HRPWM1);
 		val8 &= 0x80;
-		val8 += 0x80;	
-		val8 |= BIT(6);		
+		val8 += 0x80;
+		val8 |= BIT(6);
 		rtw_write8(padapter, SDIO_LOCAL_BASE|SDIO_REG_HRPWM1, val8);
 		DBG_871X("%s: write rpwm=%02x\n", __FUNCTION__, val8);
 		adapter_to_pwrctl(padapter)->tog = (val8 + 0x80) & 0x80;
 
 		//do polling cpwm
-		start_time = rtw_get_current_time();		
+		start_time = rtw_get_current_time();
 		do {
 
 			rtw_mdelay_os(1);
-			
+
 			rtw_hal_get_hwreg(padapter, HW_VAR_CPWM, &cpwm_now);
 			if ((cpwm_orig ^ cpwm_now) & 0x80)
-			{		
-#ifdef DBG_CHECK_FW_PS_STATE				
+			{
+#ifdef DBG_CHECK_FW_PS_STATE
 				DBG_871X("%s: polling cpwm ok when leaving IPS in FWLPS state, cpwm_orig=%02x, cpwm_now=%02x, 0x100=0x%x \n"
 				, __FUNCTION__, cpwm_orig, cpwm_now, rtw_read8(padapter, REG_CR));
 #endif //DBG_CHECK_FW_PS_STATE
@@ -1001,12 +1001,12 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 			{
 				DBG_871X("%s: polling cpwm timeout when leaving IPS in FWLPS state\n", __FUNCTION__);
 				break;
-			}			
+			}
 		} while (1);
 
 		rtl8188f_set_FwPwrModeInIPS_cmd(padapter, 0);
 
-		rtw_hal_set_hwreg(padapter, HW_VAR_APFM_ON_MAC, &bMacPwrCtrlOn);		
+		rtw_hal_set_hwreg(padapter, HW_VAR_APFM_ON_MAC, &bMacPwrCtrlOn);
 
 
 #ifdef DBG_CHECK_FW_PS_STATE
@@ -1017,7 +1017,7 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 		}
 #endif //DBG_CHECK_FW_PS_STATE
 		return _SUCCESS;
-	}	
+	}
 #endif //CONFIG_SWLPS_IN_IPS
 
 	// Disable Interrupt first.
@@ -1034,20 +1034,20 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 		DBG_871X("check fw_ps_state fail before PowerOn!\n");
 		pdbgpriv->dbg_ips_drvopen_fail_cnt++;
 	}
-	
+
 	ret = rtw_hal_power_on(padapter);
 	if (_FAIL == ret) {
 		RT_TRACE(_module_hci_hal_init_c_, _drv_err_, ("Failed to init Power On!\n"));
 		return _FAIL;
 	}
 	DBG_871X("Power on ok!\n");
-	
+
 	if(rtw_fw_ps_state(padapter) == _FAIL)
 	{
 		DBG_871X("check fw_ps_state fail after PowerOn!\n");
 		pdbgpriv->dbg_ips_drvopen_fail_cnt++;
-	}	
-	
+	}
+
 
 	rtw_write8(padapter, REG_EARLY_MODE_CONTROL, 0);
 
@@ -1121,7 +1121,7 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 	pHalData->RfRegChnlVal[0] = PHY_QueryRFReg(padapter, (RF_PATH)0, RF_CHNLBW, bRFRegOffsetMask);
 	pHalData->RfRegChnlVal[1] = PHY_QueryRFReg(padapter, (RF_PATH)1, RF_CHNLBW, bRFRegOffsetMask);
 
-	
+
 	//if (!pHalData->bMACFuncEnable) {
 		_InitQueueReservedPage(padapter);
 		_InitTxBufferBoundary(padapter);
@@ -1155,7 +1155,7 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 	_InitBurstPktLen_8188FS(padapter);
 
 	//YJ,TODO
-	rtw_write8(padapter, REG_SECONDARY_CCA_CTRL_8188F, 0x3);	// CCA 
+	rtw_write8(padapter, REG_SECONDARY_CCA_CTRL_8188F, 0x3);	// CCA
 	rtw_write8(padapter, 0x976, 0);	// hpfan_todo: 2nd CCA related
 
 #if defined(CONFIG_CONCURRENT_MODE) || defined(CONFIG_TX_MCAST2UNI)
@@ -1220,7 +1220,7 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 	rtw_write32(padapter, SDIO_LOCAL_BASE|SDIO_REG_TX_CTRL, u4Tmp);
 
 	_RfPowerSave(padapter);
-	
+
 	rtl8188f_InitHalDm(padapter);
 
 	//DbgPrint("pHalData->DefaultTxPwrDbm = %d\n", pHalData->DefaultTxPwrDbm);
@@ -1245,7 +1245,7 @@ static u32 rtl8188fs_hal_init(PADAPTER padapter)
 #ifdef CONFIG_XMIT_ACK
 	//ack for xmit mgmt frames.
 	rtw_write32(padapter, REG_FWHW_TXQ_CTRL, rtw_read32(padapter, REG_FWHW_TXQ_CTRL)|BIT(12));
-#endif //CONFIG_XMIT_ACK	
+#endif //CONFIG_XMIT_ACK
 
 //	pHalData->PreRpwmVal = SdioLocalCmd52Read1Byte(padapter, SDIO_REG_HRPWM1) & 0x80;
 
@@ -1349,7 +1349,7 @@ static void CardDisableRTL8188FSdio(PADAPTER padapter)
 //	rtw_write8(padapter, REG_RSV_CTRL+1, u1bTmp);
 
 	//	==== Reset digital sequence end ======
-	
+
 	bMacPwrCtrlOn = _FALSE;	// Disable CMD53 R/W
 	ret = _FALSE;
 	rtw_hal_set_hwreg(padapter, HW_VAR_APFM_ON_MAC, &bMacPwrCtrlOn);
@@ -1381,7 +1381,7 @@ static u32 rtl8188fs_hal_deinit(PADAPTER padapter)
 #endif
 
 	if (rtw_is_hw_init_completed(padapter)) {
-#ifdef CONFIG_SWLPS_IN_IPS				
+#ifdef CONFIG_SWLPS_IN_IPS
 		if (adapter_to_pwrctl(padapter)->bips_processing == _TRUE)
 		{
 			u8	bMacPwrCtrlOn;
@@ -1394,9 +1394,9 @@ static u32 rtl8188fs_hal_deinit(PADAPTER padapter)
 			rtw_write8(padapter, 0x13d, 0x1);
 
 
-			bMacPwrCtrlOn = _FALSE;	// Disable CMD53 R/W	
+			bMacPwrCtrlOn = _FALSE;	// Disable CMD53 R/W
 			rtw_hal_set_hwreg(padapter, HW_VAR_APFM_ON_MAC, &bMacPwrCtrlOn);
-			
+
 			ret = HalPwrSeqCmdParsing(padapter, PWR_CUT_ALL_MSK, PWR_FAB_ALL_MSK, PWR_INTF_SDIO_MSK, rtl8188F_enter_swlps_flow);
 			if (ret == _FALSE) {
 				DBG_8192C("%s: run LPS flow in IPS fail!\n", __FUNCTION__);
@@ -1411,9 +1411,9 @@ static u32 rtl8188fs_hal_deinit(PADAPTER padapter)
 			{
 				int cnt=0;
 				u8 val8 = 0;
-			
+
 				DBG_871X("%s: issue H2C to FW when entering IPS\n", __FUNCTION__);
-			
+
 				rtl8188f_set_FwPwrModeInIPS_cmd(padapter, 0x3);
 				//poll 0x1cc to make sure H2C command already finished by FW; MAC_0x1cc=0 means H2C done by FW.
 				do{
@@ -1436,7 +1436,7 @@ static u32 rtl8188fs_hal_deinit(PADAPTER padapter)
 					do{
 						val8 = rtw_read8(padapter, REG_CR);
 						cnt++;
-						DBG_871X("%s  polling 0x100=0x%x, cnt=%d \n", __FUNCTION__, val8, cnt);			
+						DBG_871X("%s  polling 0x100=0x%x, cnt=%d \n", __FUNCTION__, val8, cnt);
 						rtw_mdelay_os(10);
 					}while(cnt<100 && (val8!=0xEA));
 #ifdef DBG_CHECK_FW_PS_STATE
@@ -1450,12 +1450,12 @@ static u32 rtl8188fs_hal_deinit(PADAPTER padapter)
 					DBG_871X("MAC_1C0=%08x, MAC_1C4=%08x, MAC_1C8=%08x, MAC_1CC=%08x\n", rtw_read32(padapter, 0x1c0), rtw_read32(padapter, 0x1c4)
 					, rtw_read32(padapter, 0x1c8), rtw_read32(padapter, 0x1cc));
 				}
-			
+
 				DBG_871X("polling done when entering IPS, check result : 0x100=0x%x, cnt=%d, MAC_1cc=0x%02x\n"
 				, rtw_read8(padapter, REG_CR), cnt, rtw_read8(padapter, REG_HMETFR));
 
 				adapter_to_pwrctl(padapter)->pre_ips_type = 0;
-				
+
 			}
 			else
 			{
@@ -1471,7 +1471,7 @@ static u32 rtl8188fs_hal_deinit(PADAPTER padapter)
 
 				adapter_to_pwrctl(padapter)->pre_ips_type = 1;
 			}
-			
+
 		}
 		else
 #endif //CONFIG_SWLPS_IN_IPS
@@ -1617,9 +1617,9 @@ _ReadEfuseInfo8188FS(
 	Hal_EfuseParseThermalMeter_8188F(padapter, hwinfo, pHalData->bautoload_fail_flag);
 	Hal_EfuseParseAntennaDiversity_8188F(padapter, hwinfo, pHalData->bautoload_fail_flag);
 	Hal_EfuseParseCustomerID_8188F(padapter, hwinfo, pHalData->bautoload_fail_flag);
-	
+
 	//Hal_EfuseParseVoltage_8188F(padapter, hwinfo, pHalData->bautoload_fail_flag);
-	
+
 #if defined(CONFIG_WOWLAN) || defined(CONFIG_AP_WOWLAN)
 	Hal_DetectWoWMode(padapter);
 #endif

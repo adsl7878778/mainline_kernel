@@ -1,5 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +27,7 @@
 
 #include "debug.h"
 
-/* in the futre, the name 'au_rwsem' will be totally gone */
+/* in the future, the name 'au_rwsem' will be totally gone */
 #define au_rwsem	rw_semaphore
 
 /* to debug easier, do not make them inlined functions */

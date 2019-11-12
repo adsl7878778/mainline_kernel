@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,7 +74,7 @@ void au_di_free(struct au_dinfo *dinfo)
 		while (bindex++ <= bbot)
 			au_hdput(p++);
 	}
-	kfree(dinfo->di_hdentry);
+	au_kfree_try_rcu(dinfo->di_hdentry);
 	au_cache_free_dinfo(dinfo);
 }
 

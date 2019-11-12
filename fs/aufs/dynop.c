@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2010-2017 Junjiro R. Okajima
+ * Copyright (C) 2010-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,8 +40,8 @@ static struct au_dykey *dy_gfind_get(struct hlist_bl_head *hbl,
 	hlist_bl_lock(hbl);
 	hlist_bl_for_each_entry(tmp, pos, hbl, dk_hnode)
 		if (tmp->dk_op.dy_hop == h_op) {
-			key = tmp;
-			kref_get(&key->dk_kref);
+			if (kref_get_unless_zero(&tmp->dk_kref))
+				key = tmp;
 			break;
 		}
 	hlist_bl_unlock(hbl);
@@ -94,8 +95,8 @@ static struct au_dykey *dy_gadd(struct hlist_bl_head *hbl, struct au_dykey *key)
 	hlist_bl_lock(hbl);
 	hlist_bl_for_each_entry(tmp, pos, hbl, dk_hnode)
 		if (tmp->dk_op.dy_hop == h_op) {
-			kref_get(&tmp->dk_kref);
-			found = tmp;
+			if (kref_get_unless_zero(&tmp->dk_kref))
+				found = tmp;
 			break;
 		}
 	if (!found)
@@ -241,7 +242,7 @@ static struct au_dykey *dy_get(struct au_dynop *op, struct au_branch *br)
 	p->set(key, op->dy_hop, au_br_sb(br));
 	old = dy_gadd(hbl, key);
 	if (old) {
-		kfree(key);
+		au_kfree_rcu(key);
 		key = old;
 	}
 
@@ -256,7 +257,7 @@ out:
 
 /* ---------------------------------------------------------------------- */
 /*
- * Aufs prohibits O_DIRECT by defaut even if the branch supports it.
+ * Aufs prohibits O_DIRECT by default even if the branch supports it.
  * This behaviour is necessary to return an error from open(O_DIRECT) instead
  * of the succeeding I/O. The dio mount option enables O_DIRECT and makes
  * open(O_DIRECT) always succeed, but the succeeding I/O may return an error.
@@ -352,9 +353,6 @@ void au_dy_arefresh(int do_dx)
 void __init au_dy_init(void)
 {
 	int i;
-
-	/* make sure that 'struct au_dykey *' can be any type */
-	BUILD_BUG_ON(offsetof(struct au_dyaop, da_key));
 
 	for (i = 0; i < AuDyLast; i++)
 		INIT_HLIST_BL_HEAD(dynop + i);

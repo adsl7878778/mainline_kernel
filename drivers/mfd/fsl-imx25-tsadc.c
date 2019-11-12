@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2014-2015 Pengutronix, Markus Pargmann <mpa@pengutronix.de>
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU General Public License version 2 as published by the
- * Free Software Foundation.
  */
 
 #include <linux/clk.h>
@@ -84,8 +81,7 @@ static int mx25_tsadc_setup_irq(struct platform_device *pdev,
 		return -ENOMEM;
 	}
 
-	irq_set_chained_handler(irq, mx25_tsadc_irq_handler);
-	irq_set_handler_data(irq, tsadc);
+	irq_set_chained_handler_and_data(irq, mx25_tsadc_irq_handler, tsadc);
 
 	return 0;
 }

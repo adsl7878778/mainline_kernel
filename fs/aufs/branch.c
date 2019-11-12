@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,15 +36,12 @@ static void au_br_do_free(struct au_branch *br)
 	au_hnotify_fin_br(br);
 	/* always, regardless the mount option */
 	au_dr_hino_free(&br->br_dirren);
+	au_xino_put(br);
 
-	if (br->br_xino.xi_file)
-		fput(br->br_xino.xi_file);
-	for (i = br->br_xino.xi_nondir.total - 1; i >= 0; i--)
-		AuDebugOn(br->br_xino.xi_nondir.array[i]);
-	kfree(br->br_xino.xi_nondir.array);
-
-	AuDebugOn(au_br_count(br));
-	au_br_count_fin(br);
+	AuLCntZero(au_lcnt_read(&br->br_nfiles, /*do_rev*/0));
+	au_lcnt_fin(&br->br_nfiles, /*do_sync*/0);
+	AuLCntZero(au_lcnt_read(&br->br_count, /*do_rev*/0));
+	au_lcnt_fin(&br->br_count, /*do_sync*/0);
 
 	wbr = br->br_wbr;
 	if (wbr) {
@@ -55,7 +53,7 @@ static void au_br_do_free(struct au_branch *br)
 
 	if (br->br_fhsm) {
 		au_br_fhsm_fin(br->br_fhsm);
-		kfree(br->br_fhsm);
+		au_kfree_try_rcu(br->br_fhsm);
 	}
 
 	key = br->br_dykey;
@@ -66,11 +64,16 @@ static void au_br_do_free(struct au_branch *br)
 			break;
 
 	/* recursive lock, s_umount of branch's */
+	/* synchronize_rcu(); */ /* why? */
 	lockdep_off();
 	path_put(&br->br_path);
 	lockdep_on();
-	kfree(wbr);
-	kfree(br);
+	au_kfree_rcu(wbr);
+	au_lcnt_wait_for_fin(&br->br_nfiles);
+	au_lcnt_wait_for_fin(&br->br_count);
+	/* I don't know why, but percpu_refcount requires this */
+	/* synchronize_rcu(); */
+	au_kfree_rcu(br);
 }
 
 /*
@@ -137,16 +140,12 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 	add_branch = kzalloc(sizeof(*add_branch), GFP_NOFS);
 	if (unlikely(!add_branch))
 		goto out;
-	add_branch->br_xino.xi_nondir.total = 8; /* initial size */
-	add_branch->br_xino.xi_nondir.array
-		= kcalloc(add_branch->br_xino.xi_nondir.total, sizeof(ino_t),
-			  GFP_NOFS);
-	if (unlikely(!add_branch->br_xino.xi_nondir.array))
+	add_branch->br_xino = au_xino_alloc(/*nfile*/1);
+	if (unlikely(!add_branch->br_xino))
 		goto out_br;
-
 	err = au_hnotify_init_br(add_branch, perm);
 	if (unlikely(err))
-		goto out_xinondir;
+		goto out_xino;
 
 	if (au_br_writable(perm)) {
 		/* may be freed separately at changing the branch permission */
@@ -175,13 +174,13 @@ static struct au_branch *au_br_alloc(struct super_block *sb, int new_nbranch,
 		return add_branch; /* success */
 
 out_wbr:
-	kfree(add_branch->br_wbr);
+	au_kfree_rcu(add_branch->br_wbr);
 out_hnotify:
 	au_hnotify_fin_br(add_branch);
-out_xinondir:
-	kfree(add_branch->br_xino.xi_nondir.array);
+out_xino:
+	au_xino_put(add_branch);
 out_br:
-	kfree(add_branch);
+	au_kfree_rcu(add_branch);
 out:
 	return ERR_PTR(err);
 }
@@ -347,7 +346,7 @@ static int au_br_init_wh(struct super_block *sb, struct au_branch *br,
 	br->br_perm = old_perm;
 
 	if (!err && wbr && !au_br_writable(new_perm)) {
-		kfree(wbr);
+		au_kfree_rcu(wbr);
 		br->br_wbr = NULL;
 	}
 
@@ -390,16 +389,16 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 		      struct au_opt_add *add)
 {
 	int err;
+	struct au_branch *brbase;
+	struct file *xf;
 	struct inode *h_inode;
 
 	err = 0;
-	spin_lock_init(&br->br_xino.xi_nondir.spin);
-	init_waitqueue_head(&br->br_xino.xi_nondir.wqh);
 	br->br_perm = add->perm;
 	br->br_path = add->path; /* set first, path_get() later */
 	spin_lock_init(&br->br_dykey_lock);
-	au_br_count_init(br);
-	atomic_set(&br->br_xino_running, 0);
+	au_lcnt_init(&br->br_nfiles, /*release*/NULL);
+	au_lcnt_init(&br->br_count, /*release*/NULL);
 	br->br_id = au_new_br_id(sb);
 	AuDebugOn(br->br_id < 0);
 
@@ -415,11 +414,13 @@ static int au_br_init(struct au_branch *br, struct super_block *sb,
 	}
 
 	if (au_opt_test(au_mntflags(sb), XINO)) {
+		brbase = au_sbr(sb, 0);
+		xf = au_xino_file(brbase->br_xino, /*idx*/-1);
+		AuDebugOn(!xf);
 		h_inode = d_inode(add->path.dentry);
-		err = au_xino_br(sb, br, h_inode->i_ino,
-				 au_sbr(sb, 0)->br_xino.xi_file, /*do_test*/1);
+		err = au_xino_init_br(sb, br, h_inode->i_ino, &xf->f_path);
 		if (unlikely(err)) {
-			AuDebugOn(br->br_xino.xi_file);
+			AuDebugOn(au_xino_file(br->br_xino, /*idx*/-1));
 			goto out_err;
 		}
 	}
@@ -535,13 +536,10 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 	}
 
 	add_bindex = add->bindex;
-	if (!remount)
-		au_br_do_add(sb, add_branch, add_bindex);
-	else {
-		sysaufs_brs_del(sb, add_bindex);
-		au_br_do_add(sb, add_branch, add_bindex);
-		sysaufs_brs_add(sb, add_bindex);
-	}
+	sysaufs_brs_del(sb, add_bindex);	/* remove successors */
+	au_br_do_add(sb, add_branch, add_bindex);
+	sysaufs_brs_add(sb, add_bindex);	/* append successors */
+	dbgaufs_brs_add(sb, add_bindex, /*topdown*/0);	/* rename successors */
 
 	h_dentry = add->path.dentry;
 	if (!add_bindex) {
@@ -549,18 +547,6 @@ int au_br_add(struct super_block *sb, struct au_opt_add *add, int remount)
 		sb->s_maxbytes = h_dentry->d_sb->s_maxbytes;
 	} else
 		au_add_nlink(root_inode, d_inode(h_dentry));
-
-	/*
-	 * this test/set prevents aufs from handling unnecesary notify events
-	 * of xino files, in case of re-adding a writable branch which was
-	 * once detached from aufs.
-	 */
-	if (au_xino_brid(sb) < 0
-	    && au_br_writable(add_branch->br_perm)
-	    && !au_test_fs_bad_xino(h_dentry->d_sb)
-	    && add_branch->br_xino.xi_file
-	    && add_branch->br_xino.xi_file->f_path.dentry->d_parent == h_dentry)
-		au_xino_brid_set(sb, add_branch->br_id);
 
 out:
 	return err;
@@ -600,7 +586,10 @@ static unsigned long long au_farray_cb(struct super_block *sb, void *a,
 static struct file **au_farray_alloc(struct super_block *sb,
 				     unsigned long long *max)
 {
-	*max = au_nfiles(sb);
+	struct au_sbinfo *sbi;
+
+	sbi = au_sbi(sb);
+	*max = au_lcnt_read(&sbi->si_nfiles, /*do_rev*/1);
 	return au_array_alloc(max, au_farray_cb, sb, /*arg*/NULL);
 }
 
@@ -863,7 +852,7 @@ out:
 }
 
 static void br_del_file(struct file **to_free, unsigned long long opened,
-			  aufs_bindex_t br_id)
+			aufs_bindex_t br_id)
 {
 	unsigned long long ull;
 	aufs_bindex_t bindex, btop, bbot, bfound;
@@ -1043,11 +1032,16 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 		AuVerbose(verbose, "no more branches left\n");
 		goto out;
 	}
+
 	br = au_sbr(sb, bindex);
 	AuDebugOn(!path_equal(&br->br_path, &del->h_path));
+	if (unlikely(au_lcnt_read(&br->br_count, /*do_rev*/1))) {
+		AuVerbose(verbose, "br %pd2 is busy now\n", del->h_path.dentry);
+		goto out;
+	}
 
 	br_id = br->br_id;
-	opened = au_br_count(br);
+	opened = au_lcnt_read(&br->br_nfiles, /*do_rev*/1);
 	if (unlikely(opened)) {
 		to_free = au_array_alloc(&opened, empty_cb, sb, NULL);
 		err = PTR_ERR(to_free);
@@ -1090,13 +1084,11 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 		di_write_lock_child(root);
 	}
 
-	if (!remount)
-		au_br_do_del(sb, bindex, br);
-	else {
-		sysaufs_brs_del(sb, bindex);
-		au_br_do_del(sb, bindex, br);
-		sysaufs_brs_add(sb, bindex);
-	}
+	sysaufs_brs_del(sb, bindex);	/* remove successors */
+	dbgaufs_xino_del(br);		/* remove one */
+	au_br_do_del(sb, bindex, br);
+	sysaufs_brs_add(sb, bindex);	/* append successors */
+	dbgaufs_brs_add(sb, bindex, /*topdown*/1);	/* rename successors */
 
 	if (!bindex) {
 		au_cpup_attr_all(d_inode(root), /*force*/1);
@@ -1106,8 +1098,6 @@ int au_br_del(struct super_block *sb, struct au_opt_del *del, int remount)
 	if (au_opt_test(mnt_flags, PLINK))
 		au_plink_half_refresh(sb, br_id);
 
-	if (au_xino_brid(sb) == br_id)
-		au_xino_brid_set(sb, -1);
 	goto out; /* success */
 
 out_wh:
@@ -1137,7 +1127,8 @@ static int au_ibusy(struct super_block *sb, struct aufs_ibusy __user *arg)
 
 	err = copy_from_user(&ibusy, arg, sizeof(ibusy));
 	if (!err)
-		err = !access_ok(VERIFY_WRITE, &arg->h_ino, sizeof(arg->h_ino));
+		/* VERIFY_WRITE */
+		err = !access_ok(&arg->h_ino, sizeof(arg->h_ino));
 	if (unlikely(err)) {
 		err = -EFAULT;
 		AuTraceErr(err);
@@ -1227,6 +1218,7 @@ static int au_br_mod_files_ro(struct super_block *sb, aufs_bindex_t bindex)
 	unsigned char verbose, writer;
 	struct file *file, *hf, **array;
 	struct au_hfile *hfile;
+	struct inode *h_inode;
 
 	mnt_flags = au_mntflags(sb);
 	verbose = !!au_opt_test(mnt_flags, VERBOSE);
@@ -1297,8 +1289,12 @@ static int au_br_mod_files_ro(struct super_block *sb, aufs_bindex_t bindex)
 		hf->f_mode &= ~(FMODE_WRITE | FMODE_WRITER);
 		spin_unlock(&hf->f_lock);
 		if (writer) {
-			put_write_access(file_inode(hf));
+			h_inode = file_inode(hf);
+			put_write_access(h_inode);
 			__mnt_drop_write(hf->f_path.mnt);
+			if ((hf->f_mode & (FMODE_READ | FMODE_WRITE))
+			    == FMODE_READ)
+				i_readcount_inc(h_inode);
 		}
 	}
 
@@ -1383,7 +1379,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 		if (br->br_wbr) {
 			err = au_wbr_init(br, sb, mod->perm);
 			if (unlikely(err)) {
-				kfree(br->br_wbr);
+				au_kfree_rcu(br->br_wbr);
 				br->br_wbr = NULL;
 			}
 		}
@@ -1395,7 +1391,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 		if (!au_br_fhsm(mod->perm)) {
 			/* fhsm --> non-fhsm */
 			au_br_fhsm_fin(br->br_fhsm);
-			kfree(br->br_fhsm);
+			au_kfree_rcu(br->br_fhsm);
 			br->br_fhsm = NULL;
 		}
 	} else if (au_br_fhsm(mod->perm))
@@ -1407,7 +1403,7 @@ int au_br_mod(struct super_block *sb, struct au_opt_mod *mod, int remount,
 	goto out; /* success */
 
 out_bf:
-	kfree(bf);
+	au_kfree_try_rcu(bf);
 out:
 	AuTraceErr(err);
 	return err;

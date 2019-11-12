@@ -239,5 +239,5 @@
 //#define DBG_XMIT_BUF_EXT
 //#define DBG_CHECK_FW_PS_STATE
 //#define DBG_CHECK_FW_PS_STATE_H2C
-//#define CONFIG_FW_C2H_DEBUG 
+//#define CONFIG_FW_C2H_DEBUG
 

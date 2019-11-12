@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +22,7 @@
 
 #include "aufs.h"
 
-#define WH_MASK			S_IRUGO
+#define WH_MASK			0444
 
 /*
  * If a directory contains this file, then it is opaque.  We start with the
@@ -162,7 +163,7 @@ struct dentry *au_whtmp_lkup(struct dentry *h_parent, struct au_branch *br,
 
 out_name:
 	if (name != defname)
-		kfree(name);
+		au_kfree_try_rcu(name);
 out:
 	AuTraceErrPtr(dentry);
 	return dentry;
@@ -314,10 +315,10 @@ static int au_whdir(struct inode *h_dir, struct path *path)
 
 	err = -EEXIST;
 	if (d_is_negative(path->dentry)) {
-		int mode = S_IRWXU;
+		int mode = 0700;
 
 		if (au_test_nfs(path->dentry->d_sb))
-			mode |= S_IXUGO;
+			mode |= 0111;
 		err = vfsub_mkdir(h_dir, path, mode);
 	} else if (d_is_dir(path->dentry))
 		err = 0;
@@ -346,7 +347,7 @@ static void au_wh_init_ro(struct inode *h_dir, struct au_wh_base base[],
 /*
  * returns tri-state,
  * minus: error, caller should print the message
- * zero: succuess
+ * zero: success
  * plus: error, caller should NOT print the message
  */
 static int au_wh_init_rw_nolink(struct dentry *h_root, struct au_wbr *wbr,
@@ -599,10 +600,10 @@ static void reinit_br_wh(void *arg)
 out:
 	if (wbr)
 		atomic_dec(&wbr->wbr_wh_running);
-	au_br_put(a->br);
+	au_lcnt_dec(&a->br->br_count);
 	si_write_unlock(a->sb);
 	au_nwt_done(&au_sbi(a->sb)->si_nowait);
-	kfree(arg);
+	au_kfree_rcu(a);
 	if (unlikely(err))
 		AuIOErr("err %d\n", err);
 }
@@ -625,12 +626,12 @@ static void kick_reinit_br_wh(struct super_block *sb, struct au_branch *br)
 		 */
 		arg->sb = sb;
 		arg->br = br;
-		au_br_get(br);
+		au_lcnt_inc(&br->br_count);
 		wkq_err = au_wkq_nowait(reinit_br_wh, arg, sb, /*flags*/0);
 		if (unlikely(wkq_err)) {
 			atomic_dec(&br->br_wbr->wbr_wh_running);
-			au_br_put(br);
-			kfree(arg);
+			au_lcnt_dec(&br->br_count);
+			au_kfree_rcu(arg);
 		}
 		do_dec = 0;
 	}
@@ -789,7 +790,7 @@ struct dentry *au_wh_lkup(struct dentry *h_parent, struct qstr *base_name,
 	wh_dentry = ERR_PTR(err);
 	if (!err) {
 		wh_dentry = vfsub_lkup_one(&wh_name, h_parent);
-		kfree(wh_name.name);
+		au_kfree_try_rcu(wh_name.name);
 	}
 	return wh_dentry;
 }
@@ -907,7 +908,7 @@ struct au_whtmp_rmdir *au_whtmp_rmdir_alloc(struct super_block *sb, gfp_t gfp)
 		rdhash = AUFS_RDHASH_DEF;
 	err = au_nhash_alloc(&whtmp->whlist, rdhash, gfp);
 	if (unlikely(err)) {
-		kfree(whtmp);
+		au_kfree_rcu(whtmp);
 		whtmp = ERR_PTR(err);
 	}
 
@@ -918,11 +919,11 @@ out:
 void au_whtmp_rmdir_free(struct au_whtmp_rmdir *whtmp)
 {
 	if (whtmp->br)
-		au_br_put(whtmp->br);
+		au_lcnt_dec(&whtmp->br->br_count);
 	dput(whtmp->wh_dentry);
 	iput(whtmp->dir);
 	au_nhash_wh_free(&whtmp->whlist);
-	kfree(whtmp);
+	au_kfree_rcu(whtmp);
 }
 
 /*
@@ -1051,7 +1052,7 @@ void au_whtmp_kick_rmdir(struct inode *dir, aufs_bindex_t bindex,
 	sb = dir->i_sb;
 	args->dir = au_igrab(dir);
 	args->br = au_sbr(sb, bindex);
-	au_br_get(args->br);
+	au_lcnt_inc(&args->br->br_count);
 	args->wh_dentry = dget(wh_dentry);
 	wkq_err = au_wkq_nowait(call_rmdir_whtmp, args, sb, /*flags*/0);
 	if (unlikely(wkq_err)) {

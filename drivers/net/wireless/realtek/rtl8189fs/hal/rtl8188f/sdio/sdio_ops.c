@@ -1049,7 +1049,7 @@ s32 sdio_local_write(
 }
 
 u8 SdioLocalCmd52Read1Byte(PADAPTER padapter, u32 addr)
-{	
+{
 	u8 val = 0;
 	struct intf_hdl * pintfhdl=&padapter->iopriv.intf;
 
@@ -1060,7 +1060,7 @@ u8 SdioLocalCmd52Read1Byte(PADAPTER padapter, u32 addr)
 }
 
 u16 SdioLocalCmd52Read2Byte(PADAPTER padapter, u32 addr)
-{	
+{
 	u16 val = 0;
 	struct intf_hdl * pintfhdl=&padapter->iopriv.intf;
 
@@ -1073,7 +1073,7 @@ u16 SdioLocalCmd52Read2Byte(PADAPTER padapter, u32 addr)
 }
 
 u32 SdioLocalCmd52Read4Byte(PADAPTER padapter, u32 addr)
-{	
+{
 	u32 val = 0;
 	struct intf_hdl * pintfhdl=&padapter->iopriv.intf;
 
@@ -1087,7 +1087,7 @@ u32 SdioLocalCmd52Read4Byte(PADAPTER padapter, u32 addr)
 
 u32 SdioLocalCmd53Read4Byte(PADAPTER padapter, u32 addr)
 {
-	
+
 	u8 bMacPwrCtrlOn;
 	u32 val = 0;
 	struct intf_hdl * pintfhdl=&padapter->iopriv.intf;
@@ -1145,7 +1145,7 @@ void SdioLocalCmd52Write4Byte(PADAPTER padapter, u32 addr, u32 v)
 #endif
 
 static s32 sdio_iread(PADAPTER padapter, u32 addr, u8 size, u8 *v)
-{	
+{
 	struct intf_hdl *pintfhdl = &padapter->iopriv.intf;
 	_mutex *mutex = &adapter_to_dvobj(padapter)->sd_indirect_access_mutex;
 
@@ -1194,7 +1194,7 @@ static s32 sdio_iread(PADAPTER padapter, u32 addr, u8 size, u8 *v)
 		}
 
 		err = sd_cmd52_read(pintfhdl, SDIO_LOCAL_CMD_ADDR(SDIO_REG_INDIRECT_REG_CFG_8188F + 2), 1, cmd + 2);
-		
+
 		if (!err && GET_INDIRECT_REG_RDY(cmd))
 			break;
 
@@ -1257,7 +1257,7 @@ exit:
 }
 
 static s32 sdio_iwrite(PADAPTER padapter, u32 addr, u8 size, u8 *v)
-{	
+{
 	struct intf_hdl *pintfhdl = &padapter->iopriv.intf;
 	_mutex *mutex = &adapter_to_dvobj(padapter)->sd_indirect_access_mutex;
 
@@ -1327,7 +1327,7 @@ static s32 sdio_iwrite(PADAPTER padapter, u32 addr, u8 size, u8 *v)
 		}
 
 		err = sd_cmd52_read(pintfhdl, SDIO_LOCAL_CMD_ADDR(SDIO_REG_INDIRECT_REG_CFG_8188F + 2), 1, cmd + 2);
-		
+
 		if (!err && GET_INDIRECT_REG_RDY(cmd))
 			break;
 
@@ -1829,7 +1829,7 @@ u8 CheckIPSStatus(PADAPTER padapter)
 {
 	DBG_871X("%s(): Read 0x100=0x%02x 0x86=0x%02x\n", __func__,
 		rtw_read8(padapter, 0x100),rtw_read8(padapter, 0x86));
-	
+
 	if (rtw_read8(padapter, 0x100) == 0xEA)
 		return _TRUE;
 	else
@@ -1843,7 +1843,7 @@ void DisableInterruptButCpwm28188FSdio(PADAPTER padapter)
 
 	sdio_local_read(padapter, SDIO_REG_HIMR, 4, (u8*)&tmp);
 	DBG_871X("DisableInterruptButCpwm28188FSdio(): Read SDIO_REG_HIMR: 0x%08x\n", tmp);
-	
+
 	himr = cpu_to_le32(SDIO_HIMR_DISABLED)|SDIO_HIMR_CPWM2_MSK;
 	sdio_local_write(padapter, SDIO_REG_HIMR, 4, (u8*)&himr);
 
@@ -2173,7 +2173,7 @@ void sd_int_dpc(PADAPTER padapter)
 			_set_workitem(&padapter->evtpriv.c2h_wk);
 		}
 	}
-#endif	
+#endif
 
 	if (phal->sdio_hisr & SDIO_HISR_RXFOVW)
 	{
@@ -2309,7 +2309,7 @@ u8 HalQueryTxOQTBufferStatus8188FSdio(PADAPTER padapter)
 	return _TRUE;
 }
 
-#if defined(CONFIG_WOWLAN) || defined(CONFIG_AP_WOWLAN) 
+#if defined(CONFIG_WOWLAN) || defined(CONFIG_AP_WOWLAN)
 u8 RecvOnePkt(PADAPTER padapter, u32 size)
 {
 	struct recv_buf *precvbuf;

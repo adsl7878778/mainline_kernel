@@ -266,25 +266,25 @@ static void Init_ODM_ComInfo_88E(PADAPTER	Adapter)
 	ODM_CmnInfoInit(pDM_Odm,ODM_CMNINFO_CUT_VER,cut_ver);
 
  	ODM_CmnInfoInit(pDM_Odm, ODM_CMNINFO_RF_ANTENNA_TYPE, pHalData->TRxAntDivType);
-	
+
 	#ifdef CONFIG_DISABLE_ODM
 	SupportAbility = 0;
 	#else
 	SupportAbility = 	ODM_RF_CALIBRATION |
 					ODM_RF_TX_PWR_TRACK
-					;	
+					;
 	/* if(pHalData->AntDivCfg)
 		SupportAbility |= ODM_BB_ANT_DIV; */
-	#endif	
+	#endif
 
 	ODM_CmnInfoUpdate(pDM_Odm,ODM_CMNINFO_ABILITY,SupportAbility);
-	
+
 }
 static void Update_ODM_ComInfo_88E(PADAPTER	Adapter)
 {
 	PHAL_DATA_TYPE	pHalData = GET_HAL_DATA(Adapter);
 	PDM_ODM_T		pDM_Odm = &(pHalData->odmpriv);
-	u32  SupportAbility = 0;	
+	u32  SupportAbility = 0;
 	int i;
 
 	SupportAbility = 0
@@ -294,7 +294,7 @@ static void Update_ODM_ComInfo_88E(PADAPTER	Adapter)
 		| ODM_BB_FA_CNT
 		| ODM_BB_RSSI_MONITOR
 		| ODM_BB_CCK_PD
-		//| ODM_BB_PWR_SAVE	
+		//| ODM_BB_PWR_SAVE
 		| ODM_BB_CFO_TRACKING
 		| ODM_RF_CALIBRATION
 		| ODM_RF_TX_PWR_TRACK
@@ -309,7 +309,7 @@ static void Update_ODM_ComInfo_88E(PADAPTER	Adapter)
 	if (!Adapter->registrypriv.qos_opt_enable) {
 		SupportAbility |= ODM_MAC_EDCA_TURBO;
 	}
-	
+
 	if(pHalData->AntDivCfg)
 		SupportAbility |= ODM_BB_ANT_DIV;
 
@@ -336,7 +336,7 @@ rtl8188e_InitHalDm(
 	IN	PADAPTER	Adapter
 	)
 {
-	PHAL_DATA_TYPE	pHalData = GET_HAL_DATA(Adapter);	
+	PHAL_DATA_TYPE	pHalData = GET_HAL_DATA(Adapter);
 	PDM_ODM_T		pDM_Odm = &(pHalData->odmpriv);
 	u8	i;
 
@@ -387,7 +387,7 @@ rtl8188e_HalDmWatchDog(
 		// Calculate Tx/Rx statistics.
 		//
 		dm_CheckStatistics(Adapter);
-		
+
 		rtw_hal_check_rxfifo_full(Adapter);
 		//
 		// Dynamically switch RTS/CTS protection.
@@ -402,7 +402,7 @@ rtl8188e_HalDmWatchDog(
 		//if(Adapter->HalFunc.TxCheckStuckHandler(Adapter))
 		//	PlatformScheduleWorkItem(&(GET_HAL_DATA(Adapter)->HalResetWorkItem));
 #endif
-	
+
 	}
 
 
@@ -414,12 +414,12 @@ rtl8188e_HalDmWatchDog(
 		pHalData->odmpriv.SupportAbility = 0;
 		#endif
 
-		if(rtw_linked_check(Adapter)){			
+		if(rtw_linked_check(Adapter)){
 			bLinked = _TRUE;
 			if (check_fwstate(&Adapter->mlmepriv, WIFI_STATION_STATE))
 				bsta_state = _TRUE;
 		}
-		
+
 #ifdef CONFIG_CONCURRENT_MODE
 		if(pbuddy_adapter && rtw_linked_check(pbuddy_adapter)){
 			bLinked = _TRUE;
@@ -433,15 +433,15 @@ rtl8188e_HalDmWatchDog(
 
 
 		ODM_DMWatchdog(&pHalData->odmpriv);
-			
+
 	}
 
 skip_dm:
-	
+
 #ifdef CONFIG_SUPPORT_HW_WPS_PBC
 	// Check GPIO to determine current Pbc status.
 	dm_CheckPbcGPIO(Adapter);
-#endif	
+#endif
 	return;
 }
 
@@ -452,8 +452,8 @@ void rtl8188e_init_dm_priv(IN PADAPTER Adapter)
 
 	//_rtw_spinlock_init(&(pHalData->odm_stainfo_lock));
 	Init_ODM_ComInfo_88E(Adapter);
-	ODM_InitAllTimers(podmpriv );	
-	PHYDM_InitDebugSetting(podmpriv);	
+	ODM_InitAllTimers(podmpriv );
+	PHYDM_InitDebugSetting(podmpriv);
 }
 
 void rtl8188e_deinit_dm_priv(IN PADAPTER Adapter)
@@ -461,7 +461,7 @@ void rtl8188e_deinit_dm_priv(IN PADAPTER Adapter)
 	PHAL_DATA_TYPE	pHalData = GET_HAL_DATA(Adapter);
 	PDM_ODM_T 		podmpriv = &pHalData->odmpriv;
 	//_rtw_spinlock_free(&pHalData->odm_stainfo_lock);
-	ODM_CancelAllTimers(podmpriv);	
+	ODM_CancelAllTimers(podmpriv);
 }
 
 
@@ -472,7 +472,7 @@ void rtl8188e_deinit_dm_priv(IN PADAPTER Adapter)
 void	AntDivCompare8188E(PADAPTER Adapter, WLAN_BSSID_EX *dst, WLAN_BSSID_EX *src)
 {
 	//PADAPTER Adapter = pDM_Odm->Adapter ;
-	
+
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
 	if(0 != pHalData->AntDivCfg )
 	{
@@ -482,7 +482,7 @@ void	AntDivCompare8188E(PADAPTER Adapter, WLAN_BSSID_EX *dst, WLAN_BSSID_EX *src
 		if(dst->Rssi >=  src->Rssi )//keep org parameter
 		{
 			src->Rssi = dst->Rssi;
-			src->PhyInfo.Optimum_antenna = dst->PhyInfo.Optimum_antenna;						
+			src->PhyInfo.Optimum_antenna = dst->PhyInfo.Optimum_antenna;
 		}
 	}
 }
@@ -490,12 +490,12 @@ void	AntDivCompare8188E(PADAPTER Adapter, WLAN_BSSID_EX *dst, WLAN_BSSID_EX *src
 // Add new function to reset the state of antenna diversity before link.
 u8 AntDivBeforeLink8188E(PADAPTER Adapter )
 {
-	
-	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);	
+
+	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
 	PDM_ODM_T 	pDM_Odm =&pHalData->odmpriv;
 	SWAT_T		*pDM_SWAT_Table = &pDM_Odm->DM_SWAT_Table;
 	struct mlme_priv	*pmlmepriv = &(Adapter->mlmepriv);
-	
+
 	// Condition that does not need to use antenna diversity.
 	if(pHalData->AntDivCfg==0)
 	{
@@ -503,8 +503,8 @@ u8 AntDivBeforeLink8188E(PADAPTER Adapter )
 		return _FALSE;
 	}
 
-	if(check_fwstate(pmlmepriv, _FW_LINKED) == _TRUE)	
-	{		
+	if(check_fwstate(pmlmepriv, _FW_LINKED) == _TRUE)
+	{
 		return _FALSE;
 	}
 
@@ -523,7 +523,7 @@ u8 AntDivBeforeLink8188E(PADAPTER Adapter )
 	{
 		pDM_SWAT_Table->SWAS_NoLink_State = 0;
 		return _FALSE;
-	}	
+	}
 
 }
 #endif

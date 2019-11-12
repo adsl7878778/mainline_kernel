@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +18,7 @@
 
 /*
  * workqueue for asynchronous/super-io operations
- * todo: try new dredential scheme
+ * todo: try new credential scheme
  */
 
 #include <linux/module.h>
@@ -171,7 +172,7 @@ out:
 
 static void au_wkq_lockdep_free(struct au_wkinfo *wkinfo)
 {
-	kfree(wkinfo->hlock);
+	au_kfree_try_rcu(wkinfo->hlock);
 }
 
 static void au_wkq_lockdep_pre(struct au_wkinfo *wkinfo)
@@ -223,7 +224,7 @@ static void wkq_func(struct work_struct *wk)
 	else {
 		kobject_put(wkinfo->kobj);
 		module_put(THIS_MODULE); /* todo: ?? */
-		kfree(wkinfo);
+		au_kfree_rcu(wkinfo);
 	}
 }
 
@@ -246,7 +247,7 @@ static int au_wkq_comp_alloc(struct au_wkinfo *wkinfo, struct completion **comp)
 
 static void au_wkq_comp_free(struct completion *comp)
 {
-	kfree(comp);
+	au_kfree_rcu(comp);
 }
 
 #else
@@ -273,7 +274,8 @@ static void au_wkq_run(struct au_wkinfo *wkinfo)
 	if (au_ftest_wkq(wkinfo->flags, NEST)) {
 		if (au_wkq_test()) {
 			AuWarn1("wkq from wkq, unless silly-rename on NFS,"
-				" due to a dead dir by UDBA?\n");
+				" due to a dead dir by UDBA,"
+				" or async xino write?\n");
 			AuDebugOn(au_ftest_wkq(wkinfo->flags, WAIT));
 		}
 	} else

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +20,7 @@
  * virtual or vertical directory
  */
 
+#include <linux/iversion.h>
 #include "aufs.h"
 
 static unsigned int calc_size(int nlen)
@@ -110,7 +112,7 @@ static void au_nhash_wh_do_free(struct hlist_head *head)
 	struct hlist_node *node;
 
 	hlist_for_each_entry_safe(pos, node, head, wh_hash)
-		kfree(pos);
+		au_kfree_rcu(pos);
 }
 
 static void au_nhash_de_do_free(struct hlist_head *head)
@@ -137,7 +139,7 @@ static void au_nhash_do_free(struct au_nhash *nhash,
 		nhash_count(head);
 		free(head++);
 	}
-	kfree(nhash->nh_head);
+	au_kfree_try_rcu(nhash->nh_head);
 }
 
 void au_nhash_wh_free(struct au_nhash *whlist)
@@ -356,8 +358,8 @@ void au_vdir_free(struct au_vdir *vdir)
 
 	deblk = vdir->vd_deblk;
 	while (vdir->vd_nblk--)
-		kfree(*deblk++);
-	kfree(vdir->vd_deblk);
+		au_kfree_try_rcu(*deblk++);
+	au_kfree_try_rcu(vdir->vd_deblk);
 	au_cache_free_vdir(vdir);
 }
 
@@ -392,7 +394,7 @@ static struct au_vdir *alloc_vdir(struct file *file)
 	if (!err)
 		return vdir; /* success */
 
-	kfree(vdir->vd_deblk);
+	au_kfree_try_rcu(vdir->vd_deblk);
 
 out_free:
 	au_cache_free_vdir(vdir);
@@ -407,7 +409,7 @@ static int reinit_vdir(struct au_vdir *vdir)
 	union au_vdir_deblk_p p, deblk_end;
 
 	while (vdir->vd_nblk > 1) {
-		kfree(vdir->vd_deblk[vdir->vd_nblk - 1]);
+		au_kfree_try_rcu(vdir->vd_deblk[vdir->vd_nblk - 1]);
 		/* vdir->vd_deblk[vdir->vd_nblk - 1] = NULL; */
 		vdir->vd_nblk--;
 	}
@@ -483,6 +485,7 @@ static int fillvdir(struct dir_context *ctx, const char *__name, int nlen,
 		if (au_nhash_test_known_wh(&arg->whlist, name, nlen))
 			goto out; /* already whiteouted */
 
+		ino = 0; /* just to suppress a warning */
 		if (shwh)
 			arg->err = au_wh_ino(sb, arg->bindex, h_ino, d_type,
 					     &ino);
@@ -655,7 +658,7 @@ static int read_vdir(struct file *file, int may_read)
 		err = 0;
 		allocated = vdir;
 	} else if (may_read
-		   && (inode->i_version != vdir->vd_version
+		   && (!inode_eq_iversion(inode, vdir->vd_version)
 		       || time_after(jiffies, vdir->vd_jiffy + expire))) {
 		do_read = 1;
 		err = reinit_vdir(vdir);
@@ -671,7 +674,7 @@ static int read_vdir(struct file *file, int may_read)
 	err = au_do_read_vdir(&arg);
 	if (!err) {
 		/* file->f_pos = 0; */ /* todo: ctx->pos? */
-		vdir->vd_version = inode->i_version;
+		vdir->vd_version = inode_query_iversion(inode);
 		vdir->vd_last.ul = 0;
 		vdir->vd_last.p.deblk = vdir->vd_deblk[0];
 		if (allocated)
@@ -768,7 +771,7 @@ int au_vdir_init(struct file *file)
 	inode = file_inode(file);
 	err = copy_vdir(vdir_cache, au_ivdir(inode));
 	if (!err) {
-		file->f_version = inode->i_version;
+		file->f_version = inode_query_iversion(inode);
 		if (allocated)
 			au_set_fvdir_cache(file, allocated);
 	} else if (allocated)
@@ -841,7 +844,8 @@ static int seek_vdir(struct file *file, struct dir_context *ctx)
 
 out:
 	/* smp_mb(); */
-	AuTraceErr(!valid);
+	if (!valid)
+		AuDbg("valid %d\n", !valid);
 	return valid;
 }
 
@@ -852,10 +856,10 @@ int au_vdir_fill_de(struct file *file, struct dir_context *ctx)
 	struct au_vdir *vdir_cache;
 	struct au_vdir_de *de;
 
-	vdir_cache = au_fvdir_cache(file);
 	if (!seek_vdir(file, ctx))
 		return 0;
 
+	vdir_cache = au_fvdir_cache(file);
 	deblk_sz = vdir_cache->vd_deblk_sz;
 	while (1) {
 		deblk_end.deblk = vdir_cache->vd_deblk[vdir_cache->vd_last.ul];

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -217,7 +218,7 @@ static struct dentry *au_do_plink_lkup(struct qstr *tgtname,
 	struct inode *h_inode;
 
 	h_inode = d_inode(h_parent);
-	vfsub_inode_lock_shared_nested(h_inode, AuLsc_I_CHILD2);
+	inode_lock_shared_nested(h_inode, AuLsc_I_CHILD2);
 	h_dentry = vfsub_lkup_one(tgtname, h_parent);
 	inode_unlock_shared(h_inode);
 	return h_dentry;
@@ -398,7 +399,7 @@ void au_plink_append(struct inode *inode, aufs_bindex_t bindex,
 	hlist_bl_unlock(hbl);
 	if (!found) {
 		cnt = au_hbl_count(hbl);
-#define msg "unexpectedly unblanced or too many pseudo-links"
+#define msg "unexpectedly unbalanced or too many pseudo-links"
 		if (cnt > AUFS_PLINK_WARN)
 			AuWarn1(msg ", %d\n", cnt);
 #undef msg

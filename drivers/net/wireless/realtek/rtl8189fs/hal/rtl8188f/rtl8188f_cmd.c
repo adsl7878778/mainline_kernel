@@ -834,9 +834,9 @@ void rtl8188f_download_rsvd_page(PADAPTER padapter, u8 mstatus)
 				rtw_hal_get_hwreg(padapter, HW_VAR_BCN_VALID, (u8 *)(&bcn_valid));
 				poll++;
 			} while (!bcn_valid && (poll%10) != 0 && !RTW_CANNOT_RUN(padapter));
-					
+
 		} while (!bcn_valid && DLBcnCount <= 100 && !RTW_CANNOT_RUN(padapter));
-		
+
 		if (RTW_CANNOT_RUN(padapter))
 			;
 		else if (!bcn_valid)
@@ -1163,7 +1163,7 @@ void rtl8188f_download_BTCoex_AP_mode_rsvd_page(PADAPTER padapter)
 			poll++;
 		} while (!bcn_valid && (poll % 10) != 0 && !RTW_CANNOT_RUN(padapter));
 	} while (!bcn_valid && (DLBcnCount <= 100) && !RTW_CANNOT_RUN(padapter));
-	
+
 	if (_TRUE == bcn_valid) {
 		struct pwrctrl_priv *pwrctl = adapter_to_pwrctl(padapter);
 		pwrctl->fw_psmode_iface_id = padapter->iface_id;

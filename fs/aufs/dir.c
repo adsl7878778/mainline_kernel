@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +21,7 @@
  */
 
 #include <linux/fs_stack.h>
+#include <linux/iversion.h>
 #include "aufs.h"
 
 void au_add_nlink(struct inode *dir, struct inode *h_dir)
@@ -143,7 +145,7 @@ static void au_do_dir_ts(void *arg)
 	au_hn_inode_lock_nested(hdir, AuLsc_I_PARENT);
 	h_dir = au_h_iptr(dir, btop);
 	if (h_dir->i_nlink
-	    && timespec_compare(&h_dir->i_mtime, &dt.dt_mtime) < 0) {
+	    && timespec64_compare(&h_dir->i_mtime, &dt.dt_mtime) < 0) {
 		dt.dt_h_path = h_path;
 		au_dtime_revert(&dt);
 	}
@@ -156,7 +158,7 @@ out_unlock:
 out:
 	dput(a->dentry);
 	au_nwt_done(&au_sbi(sb)->si_nowait);
-	kfree(arg);
+	au_kfree_try_rcu(arg);
 }
 
 void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
@@ -192,7 +194,7 @@ void au_dir_ts(struct inode *dir, aufs_bindex_t bindex)
 	if (unlikely(wkq_err)) {
 		pr_err("wkq %d\n", wkq_err);
 		dput(dentry);
-		kfree(arg);
+		au_kfree_try_rcu(arg);
 	}
 
 out:
@@ -258,7 +260,7 @@ static int do_open_dir(struct file *file, int flags, struct file *h_file)
 	err = 0;
 	mnt = file->f_path.mnt;
 	dentry = file->f_path.dentry;
-	file->f_version = d_inode(dentry)->i_version;
+	file->f_version = inode_query_iversion(d_inode(dentry));
 	bindex = au_dbtop(dentry);
 	au_set_fbtop(file, bindex);
 	btail = au_dbtaildir(dentry);
@@ -311,7 +313,7 @@ static int aufs_open_dir(struct inode *inode __maybe_unused,
 		};
 		err = au_do_open(file, &args);
 		if (unlikely(err))
-			kfree(fidir);
+			au_kfree_rcu(fidir);
 	}
 	si_read_unlock(sb);
 	return err;
@@ -347,7 +349,7 @@ static int aufs_release_dir(struct inode *inode __maybe_unused,
 				if (hf->hf_file)
 					au_hfput(hf, /*execed*/0);
 		}
-		kfree(fidir);
+		au_kfree_rcu(fidir);
 		finfo->fi_hdir = NULL;
 	}
 	au_finfo_fin(file);
@@ -476,7 +478,7 @@ static int aufs_iterate_shared(struct file *file, struct dir_context *ctx)
 	struct inode *inode, *h_inode;
 	struct super_block *sb;
 
-	AuDbg("%pD, ctx{%pf, %llu}\n", file, ctx->actor, ctx->pos);
+	AuDbg("%pD, ctx{%ps, %llu}\n", file, ctx->actor, ctx->pos);
 
 	dentry = file->f_path.dentry;
 	inode = d_inode(dentry);
@@ -587,6 +589,7 @@ static int do_test_empty(struct dentry *dentry, struct test_empty_arg *arg)
 {
 	int err;
 	struct file *h_file;
+	struct au_branch *br;
 
 	h_file = au_h_open(dentry, arg->bindex,
 			   O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_LARGEFILE,
@@ -611,7 +614,8 @@ static int do_test_empty(struct dentry *dentry, struct test_empty_arg *arg)
 
 out_put:
 	fput(h_file);
-	au_sbr_put(dentry->d_sb, arg->bindex);
+	br = au_sbr(dentry->d_sb, arg->bindex);
+	au_lcnt_dec(&br->br_nfiles);
 out:
 	return err;
 }
@@ -637,7 +641,7 @@ static int sio_test_empty(struct dentry *dentry, struct test_empty_arg *arg)
 	h_dentry = au_h_dptr(dentry, arg->bindex);
 	h_inode = d_inode(h_dentry);
 	/* todo: i_mode changes anytime? */
-	vfsub_inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
+	inode_lock_shared_nested(h_inode, AuLsc_I_CHILD);
 	err = au_test_h_perm_sio(h_inode, MAY_EXEC | MAY_READ);
 	inode_unlock_shared(h_inode);
 	if (!err)

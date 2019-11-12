@@ -26,7 +26,7 @@ static u8 rtw_sdio_wait_enough_TxOQT_space(PADAPTER padapter, u8 agg_num)
 	u32 n = 0;
 	HAL_DATA_TYPE *pHalData = GET_HAL_DATA(padapter);
 
-	while (pHalData->SdioTxOQTFreeSpace < agg_num) 
+	while (pHalData->SdioTxOQTFreeSpace < agg_num)
 	{
 		if (RTW_CANNOT_RUN(padapter)) {
 			DBG_871X("%s: bSurpriseRemoved or bDriverStopped (wait TxOQT)\n", __func__);
@@ -34,19 +34,19 @@ static u8 rtw_sdio_wait_enough_TxOQT_space(PADAPTER padapter, u8 agg_num)
 		}
 
 		HalQueryTxOQTBufferStatus8188FSdio(padapter);
-		
+
 		if ((++n % 60) == 0) {
-			if ((n % 300) == 0) {			
+			if ((n % 300) == 0) {
 				DBG_871X("%s(%d): QOT free space(%d), agg_num: %d\n",
  				__func__, n, pHalData->SdioTxOQTFreeSpace, agg_num);
-			}	
+			}
 			rtw_msleep_os(1);
 			//yield();
 		}
 	}
 
 	pHalData->SdioTxOQTFreeSpace -= agg_num;
-	
+
 	//if (n > 1)
 	//	++priv->pshare->nr_out_of_txoqt_space;
 
@@ -126,14 +126,14 @@ query_free_page:
 		goto free_xmitbuf;
 	}
 
-	if (rtw_sdio_wait_enough_TxOQT_space(padapter, pxmitbuf->agg_num) == _FALSE) 
+	if (rtw_sdio_wait_enough_TxOQT_space(padapter, pxmitbuf->agg_num) == _FALSE)
 	{
 		goto free_xmitbuf;
 	}
 
 #ifdef CONFIG_CHECK_LEAVE_LPS
 	traffic_check_for_leave_lps(padapter, _TRUE, pxmitbuf->agg_num);
-#endif 
+#endif
 
 	rtw_write_port(padapter, deviceId, pxmitbuf->len, (u8 *)pxmitbuf);
 
@@ -280,7 +280,7 @@ static s32 xmit_xmitframes(PADAPTER padapter, struct xmit_priv *pxmitpriv)
 	int inx[4];
 	u8 pre_qsel=0xFF,next_qsel=0xFF;
 	u8 single_sta_in_queue = _FALSE;
-	
+
 	err = 0;
 	no_res = _FALSE;
 	hwxmits = pxmitpriv->hwxmits;
@@ -301,7 +301,7 @@ static s32 xmit_xmitframes(PADAPTER padapter, struct xmit_priv *pxmitpriv)
 	for (idx = 0; idx < hwentry; idx++)
 	{
 		phwxmit = hwxmits + inx[idx];
-	
+
 		if((check_pending_xmitbuf(pxmitpriv) == _TRUE) && (padapter->mlmepriv.LinkDetectInfo.bHigherBusyTxTraffic == _TRUE)) {
 			if ((phwxmit->accnt > 0) && (phwxmit->accnt < 5)) {
 				err = -2;
@@ -312,7 +312,7 @@ static s32 xmit_xmitframes(PADAPTER padapter, struct xmit_priv *pxmitpriv)
 		max_xmit_len = rtw_hal_get_sdio_tx_max_length(padapter, inx[idx]);
 
 		_enter_critical_bh(&pxmitpriv->lock, &irql);
-		
+
 		sta_phead = get_list_head(phwxmit->sta_queue);
 		sta_plist = get_next(sta_phead);
 		//because stop_sta_xmit may delete sta_plist at any time
@@ -339,7 +339,7 @@ static s32 xmit_xmitframes(PADAPTER padapter, struct xmit_priv *pxmitpriv)
 			{
 				frame_plist = get_next(frame_phead);
 				pxmitframe = LIST_CONTAINOR(frame_plist, struct xmit_frame, list);
-				
+
 				// check xmit_buf size enough or not
 				txlen = txdesc_size + rtw_wlan_pkt_size(pxmitframe);
 				next_qsel = pxmitframe->attrib.qsel;
@@ -371,7 +371,7 @@ static s32 xmit_xmitframes(PADAPTER padapter, struct xmit_priv *pxmitpriv)
 								err = -3;
 								break;
 							}
-							
+
 						} else {
 							rtw_free_xmitbuf(pxmitpriv, pxmitbuf);
 						}
@@ -449,13 +449,13 @@ static s32 xmit_xmitframes(PADAPTER padapter, struct xmit_priv *pxmitpriv)
 			else if (err == -3) {
 				/* Re-arrange the order of stations in this ac queue to balance the service for these stations */
 				rtw_list_delete(&ptxservq->tx_pending);
-				rtw_list_insert_tail(&ptxservq->tx_pending, get_list_head(phwxmit->sta_queue));			
+				rtw_list_insert_tail(&ptxservq->tx_pending, get_list_head(phwxmit->sta_queue));
 			}
 
 			if (err) break;
 		}
 		_exit_critical_bh(&pxmitpriv->lock, &irql);
-		
+
 		// dump xmit_buf to hw tx fifo
 		if (pxmitbuf)
 		{
@@ -476,8 +476,8 @@ static s32 xmit_xmitframes(PADAPTER padapter, struct xmit_priv *pxmitpriv)
 				rtw_free_xmitbuf(pxmitpriv, pxmitbuf);
 			pxmitbuf = NULL;
 		}
-		
-		if (err == -2) 
+
+		if (err == -2)
 			break;
 	}
 
@@ -534,7 +534,7 @@ next:
 		if(padapter->registrypriv.wifi_spec)
 			rtw_msleep_os(1);
 		else
-#ifdef CONFIG_REDUCE_TX_CPU_LOADING 
+#ifdef CONFIG_REDUCE_TX_CPU_LOADING
 			rtw_msleep_os(1);
 #else
 			rtw_yield_os();
@@ -546,7 +546,7 @@ next:
 	ret = rtw_txframes_pending(padapter);
 	_exit_critical_bh(&pxmitpriv->lock, &irql);
 	if (ret == 1) {
-#ifdef CONFIG_REDUCE_TX_CPU_LOADING 
+#ifdef CONFIG_REDUCE_TX_CPU_LOADING
 		rtw_msleep_os(1);
 #endif
 		goto next;
@@ -684,24 +684,24 @@ s32	rtl8188fs_hal_xmitframe_enqueue(_adapter *padapter, struct xmit_frame *pxmit
 {
 	struct xmit_priv 	*pxmitpriv = &padapter->xmitpriv;
 	s32 err;
-	
-	if ((err=rtw_xmitframe_enqueue(padapter, pxmitframe)) != _SUCCESS) 
+
+	if ((err=rtw_xmitframe_enqueue(padapter, pxmitframe)) != _SUCCESS)
 	{
 		rtw_free_xmitframe(pxmitpriv, pxmitframe);
 
-		pxmitpriv->tx_drop++;					
+		pxmitpriv->tx_drop++;
 	}
 	else
 	{
 #ifdef CONFIG_SDIO_TX_TASKLET
-		tasklet_hi_schedule(&pxmitpriv->xmit_tasklet);					
+		tasklet_hi_schedule(&pxmitpriv->xmit_tasklet);
 #else
 		_rtw_up_sema(&pxmitpriv->SdioXmitSema);
 #endif
 	}
-	
+
 	return err;
-	
+
 }
 
 /*

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -801,7 +802,7 @@ static int opt_add(struct au_opt *opt, char *opt_str, unsigned long sb_flags,
 			add->perm = AuBrPerm_RO;
 			if (au_test_fs_rr(add->path.dentry->d_sb))
 				add->perm = AuBrPerm_RR;
-			else if (!bindex && !(sb_flags & MS_RDONLY))
+			else if (!bindex && !(sb_flags & SB_RDONLY))
 				add->perm = AuBrPerm_RW;
 		}
 		opt->type = Opt_add;
@@ -864,7 +865,7 @@ au_opts_parse_mod(struct au_opt_mod *mod, substring_t args[])
 	mod->path = args[0].from;
 	p = strchr(mod->path, '=');
 	if (unlikely(!p)) {
-		pr_err("no permssion %s\n", args[0].from);
+		pr_err("no permission %s\n", args[0].from);
 		goto out;
 	}
 
@@ -917,7 +918,7 @@ static int au_opts_parse_xino(struct super_block *sb, struct au_opt_xino *xino,
 	int err;
 	struct file *file;
 
-	file = au_xino_create(sb, args[0].from, /*silent*/0);
+	file = au_xino_create(sb, args[0].from, /*silent*/0, /*wbrtop*/0);
 	err = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;
@@ -1259,7 +1260,7 @@ int au_opts_parse(struct super_block *sb, char *str, struct au_opts *opts)
 		}
 	}
 
-	kfree(a);
+	au_kfree_rcu(a);
 	dump_opts(opts);
 	if (unlikely(err))
 		au_opts_free(opts);
@@ -1385,6 +1386,7 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 	case Opt_wsum:
 		au_opt_clr(sbinfo->si_mntflags, SUM);
 		au_opt_set(sbinfo->si_mntflags, SUM_W);
+		break;
 	case Opt_nosum:
 		au_opt_clr(sbinfo->si_mntflags, SUM);
 		au_opt_clr(sbinfo->si_mntflags, SUM_W);
@@ -1442,7 +1444,8 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 
 	case Opt_trunc_xino_path:
 	case Opt_itrunc_xino:
-		err = au_xino_trunc(sb, opt->xino_itrunc.bindex);
+		err = au_xino_trunc(sb, opt->xino_itrunc.bindex,
+				    /*idx_begin*/0);
 		if (!err)
 			err = 1;
 		break;
@@ -1477,10 +1480,10 @@ static int au_opt_simple(struct super_block *sb, struct au_opt *opt,
 		break;
 
 	case Opt_acl:
-		sb->s_flags |= MS_POSIXACL;
+		sb->s_flags |= SB_POSIXACL;
 		break;
 	case Opt_noacl:
-		sb->s_flags &= ~MS_POSIXACL;
+		sb->s_flags &= ~SB_POSIXACL;
 		break;
 
 	default:
@@ -1509,8 +1512,10 @@ static int au_opt_br(struct super_block *sb, struct au_opt *opt,
 		if (opt->add.bindex < 0)
 			opt->add.bindex = 0;
 		goto add;
+		/* Always goto add, not fallthrough */
 	case Opt_prepend:
 		opt->add.bindex = 0;
+		/* fallthrough */
 	add: /* indented label */
 	case Opt_add:
 		err = au_br_add(sb, &opt->add,
@@ -1552,8 +1557,6 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 		       struct au_opts *opts)
 {
 	int err;
-	aufs_bindex_t bbot, bindex;
-	struct dentry *root, *parent, *h_root;
 
 	err = 0;
 	switch (opt->type) {
@@ -1564,24 +1567,10 @@ static int au_opt_xino(struct super_block *sb, struct au_opt *opt,
 			break;
 
 		*opt_xino = &opt->xino;
-		au_xino_brid_set(sb, -1);
-
-		/* safe d_parent access */
-		parent = opt->xino.file->f_path.dentry->d_parent;
-		root = sb->s_root;
-		bbot = au_sbbot(sb);
-		for (bindex = 0; bindex <= bbot; bindex++) {
-			h_root = au_h_dptr(root, bindex);
-			if (h_root == parent) {
-				au_xino_brid_set(sb, au_sbr_id(sb, bindex));
-				break;
-			}
-		}
 		break;
 
 	case Opt_noxino:
 		au_xino_clr(sb);
-		au_xino_brid_set(sb, -1);
 		*opt_xino = (void *)-1;
 		break;
 	}
@@ -1607,7 +1596,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 	sbinfo = au_sbi(sb);
 	AuDebugOn(!(sbinfo->si_mntflags & AuOptMask_UDBA));
 
-	if (!(sb_flags & MS_RDONLY)) {
+	if (!(sb_flags & SB_RDONLY)) {
 		if (unlikely(!au_br_writable(au_sbr_perm(sb, 0))))
 			pr_warn("first branch should be rw\n");
 		if (unlikely(au_opt_test(sbinfo->si_mntflags, SHWH)))
@@ -1640,7 +1629,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 			br->br_perm &= ~AuBrAttr_ICEX;
 #if 0
 		if ((br->br_perm & AuBrAttr_ICEX_SEC)
-		    && (au_br_sb(br)->s_flags & MS_NOSEC))
+		    && (au_br_sb(br)->s_flags & SB_NOSEC))
 			br->br_perm &= ~AuBrAttr_ICEX_SEC;
 #endif
 
@@ -1704,7 +1693,7 @@ int au_opts_verify(struct super_block *sb, unsigned long sb_flags,
 		au_hn_inode_unlock(hdir);
 
 		if (!err && do_free) {
-			kfree(wbr);
+			au_kfree_rcu(wbr);
 			br->br_wbr = NULL;
 		}
 	}

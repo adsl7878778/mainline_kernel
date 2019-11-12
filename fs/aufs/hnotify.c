@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +20,7 @@
  * abstraction to notify the direct changes on lower directories
  */
 
+/* #include <linux/iversion.h> */
 #include "aufs.h"
 
 int au_hn_alloc(struct au_hinode *hinode, struct inode *inode)
@@ -38,9 +40,9 @@ int au_hn_alloc(struct au_hinode *hinode, struct inode *inode)
 			au_cache_free_hnotify(hn);
 			/*
 			 * The upper dir was removed by udba, but the same named
-			 * dir left. In this case, aufs assignes a new inode
+			 * dir left. In this case, aufs assigns a new inode
 			 * number and set the monitor again.
-			 * For the lower dir, the old monitnor is still left.
+			 * For the lower dir, the old monitor is still left.
 			 */
 			if (err == -EEXIST)
 				err = 0;
@@ -322,7 +324,7 @@ static int hn_job(struct hn_job_args *a)
 	if (au_ftest_hnjob(a->flags, TRYXINO0)
 	    && a->inode
 	    && a->h_inode) {
-		vfsub_inode_lock_shared_nested(a->h_inode, AuLsc_I_CHILD);
+		inode_lock_shared_nested(a->h_inode, AuLsc_I_CHILD);
 		if (!a->h_inode->i_nlink
 		    && !(a->h_inode->i_state & I_LINKABLE))
 			hn_xino(a->inode, a->h_inode); /* ignore this error */
@@ -348,7 +350,7 @@ static int hn_job(struct hn_job_args *a)
 		if (vdir)
 			vdir->vd_jiffy = 0;
 		/* IMustLock(a->inode); */
-		/* a->inode->i_version++; */
+		/* inode_inc_iversion(a->inode); */
 	}
 
 	/* can do nothing but warn */
@@ -540,13 +542,13 @@ out:
 	iput(a->dir);
 	si_write_unlock(sb);
 	au_nwt_done(&sbinfo->si_nowait);
-	kfree(a);
+	au_kfree_rcu(a);
 }
 
 /* ---------------------------------------------------------------------- */
 
 int au_hnotify(struct inode *h_dir, struct au_hnotify *hnotify, u32 mask,
-	       struct qstr *h_child_qstr, struct inode *h_child_inode)
+	       const struct qstr *h_child_qstr, struct inode *h_child_inode)
 {
 	int err, len;
 	unsigned int flags[AuHnLast], f;
@@ -583,7 +585,7 @@ int au_hnotify(struct inode *h_dir, struct au_hnotify *hnotify, u32 mask,
 		flags[AuHn_CHILD] = AuHnJob_ISDIR;
 	au_fset_hnjob(flags[AuHn_PARENT], DIRENT);
 	au_fset_hnjob(flags[AuHn_CHILD], GEN);
-	switch (mask & FS_EVENTS_POSS_ON_CHILD) {
+	switch (mask & ALL_FSNOTIFY_DIRENT_EVENTS) {
 	case FS_MOVED_FROM:
 	case FS_MOVED_TO:
 		au_fset_hnjob(flags[AuHn_CHILD], XINO0);
@@ -646,7 +648,7 @@ int au_hnotify(struct inode *h_dir, struct au_hnotify *hnotify, u32 mask,
 		iput(args->h_child_inode);
 		iput(args->h_dir);
 		iput(args->dir);
-		kfree(args);
+		au_kfree_rcu(args);
 	}
 
 out:

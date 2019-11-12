@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2011 Realtek Corporation. All rights reserved.
+ * Copyright(c) 2007 - 2017 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -11,15 +11,13 @@
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110, USA
- *
- *
- ******************************************************************************/
+ *****************************************************************************/
 #ifndef __IEEE80211_H
 #define __IEEE80211_H
 
+#if defined(PLATFORM_LINUX) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22)
+#include <linux/ieee80211.h>
+#endif
 
 #ifndef CONFIG_RTL8711FW
 
@@ -206,7 +204,7 @@ enum NETWORK_TYPE {
 	WIRELESS_11A_5N = (WIRELESS_11A | WIRELESS_11_5N), /* tx: ofdm & MCS, rx: ofdm & MCS, hw: ofdm only */
 	WIRELESS_11B_24N = (WIRELESS_11B | WIRELESS_11_24N), /* tx: ofdm & cck & MCS, rx: ofdm & cck & MCS, hw: ofdm & cck */
 	WIRELESS_11BG_24N = (WIRELESS_11B | WIRELESS_11G | WIRELESS_11_24N), /* tx: ofdm & cck & MCS, rx: ofdm & cck & MCS, hw: ofdm & cck */
-	WIRELESS_11_24AC = (WIRELESS_11G | WIRELESS_11AC),
+	WIRELESS_11_24AC = (WIRELESS_11B | WIRELESS_11G | WIRELESS_11AC),
 	WIRELESS_11_5AC = (WIRELESS_11A | WIRELESS_11AC),
 
 
@@ -224,7 +222,7 @@ enum NETWORK_TYPE {
 #define IsLegacyOnly(NetType)  ((NetType) == ((NetType) & (WIRELESS_11BG | WIRELESS_11A)))
 
 #define IsSupported24G(NetType) ((NetType) & SUPPORTED_24G_NETTYPE_MSK ? _TRUE : _FALSE)
-#define IsSupported5G(NetType) ((NetType) & SUPPORTED_5G_NETTYPE_MSK ? _TRUE : _FALSE)
+#define is_supported_5g(NetType) ((NetType) & SUPPORTED_5G_NETTYPE_MSK ? _TRUE : _FALSE)
 
 #define IsEnableHWCCK(NetType) IsSupported24G(NetType)
 #define IsEnableHWOFDM(NetType) ((NetType) & (WIRELESS_11G | WIRELESS_11_24N | SUPPORTED_5G_NETTYPE_MSK) ? _TRUE : _FALSE)
@@ -235,9 +233,12 @@ enum NETWORK_TYPE {
 
 #define IsSupportedTxCCK(NetType) ((NetType) & (WIRELESS_11B) ? _TRUE : _FALSE)
 #define IsSupportedTxOFDM(NetType) ((NetType) & (WIRELESS_11G | WIRELESS_11A) ? _TRUE : _FALSE)
-#define IsSupportedHT(NetType) ((NetType) & (WIRELESS_11_24N | WIRELESS_11_5N) ? _TRUE : _FALSE)
+#define is_supported_ht(NetType) ((NetType) & (WIRELESS_11_24N | WIRELESS_11_5N) ? _TRUE : _FALSE)
 
-#define IsSupportedVHT(NetType) ((NetType) & (WIRELESS_11AC) ? _TRUE : _FALSE)
+#define is_supported_vht(NetType) ((NetType) & (WIRELESS_11AC) ? _TRUE : _FALSE)
+
+
+
 
 
 typedef struct ieee_param {
@@ -607,6 +608,7 @@ struct ieee80211_snap_hdr {
 #define WLAN_CAPABILITY_SHORT_SLOT (1<<10)
 
 /* Status codes */
+#if !defined(PLATFORM_LINUX) || LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
 #define WLAN_STATUS_SUCCESS 0
 #define WLAN_STATUS_UNSPECIFIED_FAILURE 1
 #define WLAN_STATUS_CAPS_UNSUPPORTED 10
@@ -633,11 +635,13 @@ struct ieee80211_snap_hdr {
 #define WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA 7
 #define WLAN_REASON_DISASSOC_STA_HAS_LEFT 8
 #define WLAN_REASON_STA_REQ_ASSOC_WITHOUT_AUTH 9
+#endif
 #define WLAN_REASON_ACTIVE_ROAM 65533
 #define WLAN_REASON_JOIN_WRONG_CHANNEL       65534
 #define WLAN_REASON_EXPIRATION_CHK 65535
 
 /* Information Element IDs */
+#if !defined(PLATFORM_LINUX) || LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
 #define WLAN_EID_SSID 0
 #define WLAN_EID_SUPP_RATES 1
 #define WLAN_EID_FH_PARAMS 2
@@ -659,7 +663,7 @@ struct ieee80211_snap_hdr {
 #define WLAN_EID_IBSS_DFS 41
 /* EIDs defined by IEEE 802.11h - END */
 #define WLAN_EID_ERP_INFO 42
-#define WLAN_EID_HT_CAP 45
+#define WLAN_EID_HT_CAPABILITY 45
 #define WLAN_EID_RSN 48
 #define WLAN_EID_EXT_SUPP_RATES 50
 #define WLAN_EID_MOBILITY_DOMAIN 54
@@ -673,10 +677,11 @@ struct ieee80211_snap_hdr {
 #define WLAN_EID_OVERLAPPING_BSS_SCAN_PARAMS 74
 #define WLAN_EID_MMIE 76
 #define WLAN_EID_VENDOR_SPECIFIC 221
-#define WLAN_EID_GENERIC (WLAN_EID_VENDOR_SPECIFIC)
 #define WLAN_EID_VHT_CAPABILITY 191
 #define WLAN_EID_VHT_OPERATION 192
-#define WLAN_EID_VHT_OP_MODE_NOTIFY 199
+#define WLAN_EID_OPMODE_NOTIF 199
+#endif
+#define WLAN_EID_GENERIC (WLAN_EID_VENDOR_SPECIFIC)
 
 #define IEEE80211_MGMT_HDR_LEN 24
 #define IEEE80211_DATA_HDR3_LEN 24
@@ -1347,7 +1352,6 @@ struct ieee80211_txb {
 #define MAX_RATES_LENGTH                  ((u8)12)
 #define MAX_RATES_EX_LENGTH               ((u8)16)
 #define MAX_NETWORK_COUNT                  128
-#define MAX_CHANNEL_NUMBER                 161
 #define IEEE80211_SOFTMAC_SCAN_TIME	  400
 /* (HZ / 2) */
 #define IEEE80211_SOFTMAC_ASSOC_RETRY_TIME (HZ * 2)
@@ -1544,6 +1548,7 @@ enum rtw_ieee80211_category {
 	RTW_WLAN_CATEGORY_FT = 6,
 	RTW_WLAN_CATEGORY_HT = 7,
 	RTW_WLAN_CATEGORY_SA_QUERY = 8,
+	RTW_WLAN_CATEGORY_WNM = 10,
 	RTW_WLAN_CATEGORY_UNPROTECTED_WNM = 11, /* add for CONFIG_IEEE80211W, none 11w also can use */
 	RTW_WLAN_CATEGORY_TDLS = 12,
 	RTW_WLAN_CATEGORY_SELF_PROTECTED = 15, /* add for CONFIG_IEEE80211W, none 11w also can use */
@@ -1642,6 +1647,17 @@ enum rtw_ieee80211_vht_actioncode {
 	RTW_WLAN_ACTION_VHT_OPMODE_NOTIFICATION = 2,
 };
 
+/*IEEE 802.11r action code*/
+#ifdef CONFIG_RTW_80211R
+enum rtw_ieee80211_ft_actioncode {
+	RTW_WLAN_ACTION_FT_RESV,
+	RTW_WLAN_ACTION_FT_REQUEST,
+	RTW_WLAN_ACTION_FT_RESPONSE,
+	RTW_WLAN_ACTION_FT_CONFIRM,
+	RTW_WLAN_ACTION_FT_ACK,
+	RTW_WLAN_ACTION_FT_MAX,
+};
+#endif
 
 #define OUI_MICROSOFT 0x0050f2 /* Microsoft (also used in Wi-Fi specs)
 				* 00:50:F2 */
@@ -1831,7 +1847,7 @@ int rtw_parse_wpa2_ie(u8 *wpa_ie, int wpa_ie_len, int *group_cipher, int *pairwi
 int rtw_get_sec_ie(u8 *in_ie, uint in_len, u8 *rsn_ie, u16 *rsn_len, u8 *wpa_ie, u16 *wpa_len);
 
 u8 rtw_is_wps_ie(u8 *ie_ptr, uint *wps_ielen);
-u8 *rtw_get_wps_ie_from_scan_queue(u8 *in_ie, uint in_len, u8 *wps_ie, uint *wps_ielen, u8 frame_type);
+u8 *rtw_get_wps_ie_from_scan_queue(u8 *in_ie, uint in_len, u8 *wps_ie, uint *wps_ielen, enum bss_type frame_type);
 u8 *rtw_get_wps_ie(u8 *in_ie, uint in_len, u8 *wps_ie, uint *wps_ielen);
 u8 *rtw_get_wps_attr(u8 *wps_ie, uint wps_ielen, u16 target_attr_id , u8 *buf_attr, u32 *len_attr);
 u8 *rtw_get_wps_attr_content(u8 *wps_ie, uint wps_ielen, u16 target_attr_id , u8 *buf_content, uint *len_content);
@@ -1905,6 +1921,7 @@ void rtw_macaddr_cfg(u8 *out, const u8 *hw_mac_addr);
 
 u16 rtw_mcs_rate(u8 rf_type, u8 bw_40MHz, u8 short_GI, unsigned char *MCS_rate);
 u8	rtw_ht_mcsset_to_nss(u8 *supp_mcs_set);
+u32	rtw_ht_mcs_set_to_bitmap(u8 *mcs_set, u8 nss);
 
 int rtw_action_frame_parse(const u8 *frame, u32 frame_len, u8 *category, u8 *action);
 const char *action_public_str(u8 action);
@@ -1914,5 +1931,6 @@ u8 str_2char2num(u8 hch, u8 lch);
 void macstr2num(u8 *dst, u8 *src);
 u8 convert_ip_addr(u8 hch, u8 mch, u8 lch);
 int wifirate2_ratetbl_inx(unsigned char rate);
+
 
 #endif /* IEEE80211_H */

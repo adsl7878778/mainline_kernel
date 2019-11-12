@@ -90,7 +90,7 @@
 		gpio = <&pio 0 20 GPIO_ACTIVE_HIGH>;
 	};
 
-	reg_sy8113b: gpio-regulator {
+	reg_vdd_cpux: vdd-cpux-regulator {
 		compatible = "regulator-gpio";
 		regulator-name = "vdd-cpux";
 		regulator-type = "voltage";
@@ -102,9 +102,8 @@
 
 		gpios = <&r_pio 0 6 GPIO_ACTIVE_HIGH>; /* PL6 */
 		enable-active-high;
-		gpios-states = <0x1>;
-		states = <1100000 0x0
-			  1300000 0x1>;
+		gpios-states = <1>;
+		states = <1100000 0>, <1300000 1>;
 	};
 
 	wifi_pwrseq: wifi_pwrseq {
@@ -115,7 +114,7 @@
 };
 
 &cpu0 {
-	cpu-supply = <&reg_sy8113b>;
+	cpu-supply = <&reg_vdd_cpux>;
 };
 
 &ehci0 {
@@ -134,18 +133,13 @@
 };
 
 &mmc0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc0_pins_a>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
-	cd-gpios = <&pio 5 6 GPIO_ACTIVE_HIGH>; /* PF6 */
-	cd-inverted;
+	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
 	status = "okay";
 };
 
 &mmc1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc1_pins_a>;
 	vmmc-supply = <&reg_vcc_wifi>;
 	mmc-pwrseq = <&wifi_pwrseq>;
 	bus-width = <4>;
@@ -163,10 +157,6 @@
 		interrupts = <6 10 IRQ_TYPE_EDGE_RISING>;
 		interrupt-names = "host-wake";
 	};
-};
-
-&mmc1_pins_a {
-	bias-pull-up;
 };
 
 &ohci0 {
@@ -192,7 +182,7 @@
 
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pa_pins>;
 	status = "okay";
 };
 

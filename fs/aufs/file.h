@@ -1,5 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,6 +66,7 @@ struct au_finfo {
 
 	struct hlist_bl_node	fi_hlist;
 	struct file		*fi_file;	/* very ugly */
+	struct rcu_head		rcu;
 } ____cacheline_aligned_in_smp;
 
 /* ---------------------------------------------------------------------- */
@@ -92,7 +94,7 @@ int au_do_flush(struct file *file, fl_owner_t id,
 
 /* poll.c */
 #ifdef CONFIG_AUFS_POLL
-unsigned int aufs_poll(struct file *file, poll_table *wait);
+__poll_t aufs_poll(struct file *file, struct poll_table_struct *pt);
 #endif
 
 #ifdef CONFIG_AUFS_BR_HFSPLUS

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2017 Junjiro R. Okajima
+ * Copyright (C) 2005-2019 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -128,7 +129,7 @@ int au_loopback_init(void)
 	int err;
 	struct super_block *sb __maybe_unused;
 
-	BUILD_BUG_ON(sizeof(sb->s_magic) != sizeof(unsigned long));
+	BUILD_BUG_ON(sizeof(sb->s_magic) != sizeof(*au_warn_loopback_array));
 
 	err = 0;
 	au_warn_loopback_array = kcalloc(au_warn_loopback_step,
@@ -143,5 +144,5 @@ void au_loopback_fin(void)
 {
 	if (backing_file_func)
 		symbol_put(loop_backing_file);
-	kfree(au_warn_loopback_array);
+	au_kfree_try_rcu(au_warn_loopback_array);
 }
