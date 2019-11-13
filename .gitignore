@@ -28,6 +28,7 @@
 *.lzma
 *.lzo
 *.mod.c
+*.mod
 *.o
 *.o.*
 *.order
@@ -39,6 +40,10 @@
 *.symtypes
 *.tar
 *.xz
+*.modinfo
+*.asn1.*
+*.tab.*
+*.lex.*
 Module.symvers
 modules.builtin
 
