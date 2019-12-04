@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2017 Icenowy Zheng <icenowy@aosc.io>
- * Copyright (C) 2017 Armbian
+ * Copyright (C) 2017 Antony Antony <antony@phenome.org>
+ * Copyright (C) 2016 ARM Ltd.
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -45,10 +45,12 @@
 #include "sun50i-h5.dtsi"
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/pinctrl/sun4i-a10.h>
 
 / {
-	model = "FriendlyARM NanoPi NEO Plus 2";
-	compatible = "friendlyarm,nanopi-neo2", "allwinner,sun50i-h5";
+	model = "FriendlyARM NanoPi NEO Plus2";
+	compatible = "friendlyarm,nanopi-neo-plus2", "allwinner,sun50i-h5";
 
 	aliases {
 		ethernet0 = &emac;
@@ -69,15 +71,13 @@
 		};
 
 		status {
-			label = "nanopi:blue:status";
+			label = "nanopi:red:status";
 			gpios = <&pio 0 20 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "heartbeat";
 		};
 	};
 
 	reg_gmac_3v3: gmac-3v3 {
 		compatible = "regulator-fixed";
-		pinctrl-names = "default";
 		regulator-name = "gmac-3v3";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
@@ -93,35 +93,33 @@
 		regulator-max-microvolt = <3300000>;
 	};
 
-	reg_usb0_vbus: usb0-vbus {
-		compatible = "regulator-fixed";
-		regulator-name = "usb0-vbus";
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-		enable-active-high;
-		gpio = <&r_pio 0 2 GPIO_ACTIVE_HIGH>; /* PL2 */
-		status = "okay";
+	vdd_cpux: gpio-regulator {
+		compatible = "regulator-gpio";
+		regulator-name = "vdd-cpux";
+		regulator-type = "voltage";
+		regulator-boot-on;
+		regulator-always-on;
+		regulator-min-microvolt = <1100000>;
+		regulator-max-microvolt = <1300000>;
+		regulator-ramp-delay = <50>; /* 4ms */
+		gpios = <&r_pio 0 6 GPIO_ACTIVE_HIGH>;
+		gpios-states = <0x1>;
+		states = <1100000 0>, <1300000 1>;
 	};
 
 	wifi_pwrseq: wifi_pwrseq {
-        compatible = "mmc-pwrseq-simple";
-        pinctrl-names = "default";
-        pinctrl-0 = <&wifi_en_npi>;
-        reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>; /* PL7 */
-        post-power-on-delay-ms = <200>;
-    };
-
-	rfkill_bt {
-		compatible = "rfkill-gpio";
-		pinctrl-names = "default";
-		pinctrl-0 = <&bt_pwr_pin>;
-		reset-gpios = <&pio 6 13 GPIO_ACTIVE_HIGH>; /* PG13 */
-		clocks = <&osc32k>;
-		clock-frequency = <32768>;
-		rfkill-name = "sunxi-bt";
-		rfkill-type = "bluetooth";
+		compatible = "mmc-pwrseq-simple";
+		reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>; /* PL7 */
+		post-power-on-delay-ms = <200>;
 	};
+};
 
+&codec {
+	allwinner,audio-routing =
+		"Line Out", "LINEOUT",
+		"MIC1", "Mic",
+		"Mic",  "MBIAS";
+	status = "okay";
 };
 
 &ehci0 {
@@ -149,8 +147,6 @@
 };
 
 &mmc0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
 	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
@@ -158,37 +154,27 @@
 };
 
 &mmc1 {
-    pinctrl-names = "default";
-    pinctrl-0 = <&mmc1_pins_a>;
-    vmmc-supply = <&reg_vcc3v3>;
-    vqmmc-supply = <&reg_vcc3v3>;
-    mmc-pwrseq = <&wifi_pwrseq>;
-    bus-width = <4>;
-    non-removable;
-    status = "okay";
+	vmmc-supply = <&reg_vcc3v3>;
+	vqmmc-supply = <&reg_vcc3v3>;
+	mmc-pwrseq = <&wifi_pwrseq>;
+	bus-width = <4>;
+	non-removable;
+	status = "okay";
 
-    brcmf: bcrmf@1 {
-        reg = <1>;
-        compatible = "brcm,bcm4329-fmac";
-    };
+	brcmf: wifi@1 {
+		reg = <1>;
+		compatible = "brcm,bcm4329-fmac";
+	};
 };
 
 &mmc2 {
-    pinctrl-names = "default";
-    pinctrl-0 = <&mmc2_8bit_pins>;
-    vmmc-supply = <&reg_vcc3v3>;
-    bus-width = <8>;
-    non-removable;
-    cap-mmc-hw-reset;
-    boot_device = <0>;
-    status = "okay";
-};
-
-&mmc2_8bit_pins {
-    /* Increase drive strength for DDR modes */
-    drive-strength = <40>;
-    /* eMMC is missing pull-ups */
-    bias-pull-up;
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc2_8bit_pins>;
+	vmmc-supply = <&reg_vcc3v3>;
+	bus-width = <8>;
+	non-removable;
+	cap-mmc-hw-reset;
+	status = "okay";
 };
 
 &ohci0 {
@@ -199,27 +185,9 @@
 	status = "okay";
 };
 
-&pio {
-	gmac_power_pin_nanopi: gmac_power_pin@0 {
-		pins = "PD6";
-		function = "gpio_out";
-	};
-	bt_pwr_pin: bt_pwr_pin@0 {
-		pins = "PG13";
-		function = "gpio_out";
-	};
-};
-
-&r_pio {
-    wifi_en_npi: wifi_en_pin {
-        pins = "PL7";
-        function = "gpio_out";
-    };
-};
-
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pa_pins>;
 	status = "okay";
 };
 
@@ -229,8 +197,6 @@
 };
 
 &usbphy {
-	/* USB Type-A port's VBUS is always on */
-	usb0_id_det-gpios = <&pio 6 12 GPIO_ACTIVE_HIGH>; /* PG12 */
-	usb0_vbus-supply = <&reg_usb0_vbus>;
+	/* USB Type-A ports' VBUS is always on */
 	status = "okay";
 };

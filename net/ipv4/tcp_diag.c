@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * tcp_diag.c	Module for monitoring TCP transport protocols sockets.
  *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
- *
- *	This program is free software; you can redistribute it and/or
- *      modify it under the terms of the GNU General Public License
- *      as published by the Free Software Foundation; either version
- *      2 of the License, or (at your option) any later version.
  */
 
 #include <linux/module.h>
@@ -24,7 +20,7 @@ static void tcp_diag_get_info(struct sock *sk, struct inet_diag_msg *r,
 {
 	struct tcp_info *info = _info;
 
-	if (sk_state_load(sk) == TCP_LISTEN) {
+	if (inet_sk_state_load(sk) == TCP_LISTEN) {
 		r->idiag_rqueue = sk->sk_ack_backlog;
 		r->idiag_wqueue = sk->sk_max_ack_backlog;
 	} else if (sk->sk_type == SOCK_STREAM) {

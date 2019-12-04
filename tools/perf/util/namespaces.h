@@ -1,7 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License, version 2, as
- * published by the Free Software Foundation.
  *
  * Copyright (C) 2017 Hari Bathini, IBM Corporation
  */
@@ -9,9 +7,15 @@
 #ifndef __PERF_NAMESPACES_H
 #define __PERF_NAMESPACES_H
 
-#include "../perf.h"
-#include <linux/list.h>
+#include <sys/types.h>
+#include <linux/stddef.h>
+#include <linux/perf_event.h>
 #include <linux/refcount.h>
+#include <linux/types.h>
+
+#ifndef HAVE_SETNS_SUPPORT
+int setns(int fd, int nstype);
+#endif
 
 struct namespaces_event;
 
@@ -36,6 +40,7 @@ struct nsinfo {
 struct nscookie {
 	int			oldns;
 	int			newns;
+	char			*oldcwd;
 };
 
 int nsinfo__init(struct nsinfo *nsi);

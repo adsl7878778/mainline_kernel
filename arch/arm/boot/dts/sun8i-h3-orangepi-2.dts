@@ -75,8 +75,6 @@
 
 	leds {
 		compatible = "gpio-leds";
-		pinctrl-names = "default";
-		pinctrl-0 = <&leds_opc>, <&leds_r_opc>;
 
 		status_led {
 			label = "orangepi:red:status";
@@ -92,8 +90,6 @@
 
 	r_gpio_keys {
 		compatible = "gpio-keys";
-		pinctrl-names = "default";
-		pinctrl-0 = <&sw_r_opc>;
 
 		sw2 {
 			label = "sw2";
@@ -110,8 +106,6 @@
 
 	wifi_pwrseq: wifi_pwrseq {
 		compatible = "mmc-pwrseq-simple";
-		pinctrl-names = "default";
-		pinctrl-0 = <&wifi_pwrseq_pin_orangepi>;
 		reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>; /* PL7 WIFI_EN */
 	};
 };
@@ -127,10 +121,6 @@
 
 &de {
 	status = "okay";
-};
-
-&cpu0 {
-	cpu-supply = <&reg_sy8106a>;
 };
 
 &ehci1 {
@@ -154,33 +144,20 @@
 	};
 };
 
-&i2s2 {
-	status = "okay";
-};
-
 &ir {
 	pinctrl-names = "default";
-	pinctrl-0 = <&ir_pins_a>;
-	status = "okay";
-};
-
-&mixer0 {
+	pinctrl-0 = <&r_ir_rx_pin>;
 	status = "okay";
 };
 
 &mmc0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
-	cd-gpios = <&pio 5 6 GPIO_ACTIVE_HIGH>; /* PF6 */
-	cd-inverted;
+	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
 	status = "okay";
 };
 
 &mmc1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc1_pins_a>;
 	vmmc-supply = <&reg_vcc3v3>;
 	mmc-pwrseq = <&wifi_pwrseq>;
 	bus-width = <4>;
@@ -196,60 +173,14 @@
 	};
 };
 
-&pio {
-	leds_opc: led_pins@0 {
-		pins = "PA15";
-		function = "gpio_out";
-	};
-};
-
-&r_i2c {
-	status = "okay";
-
-	reg_sy8106a: regulator@65 {
-		compatible = "silergy,sy8106a";
-		reg = <0x65>;
-		regulator-name = "vdd-cpux";
-		regulator-min-microvolt = <1000000>;
-		regulator-max-microvolt = <1400000>;
-		regulator-boot-on;
-		regulator-always-on;
-	};
-};
-
-&r_pio {
-	leds_r_opc: led_pins@0 {
-		pins = "PL10";
-		function = "gpio_out";
-	};
-
-	sw_r_opc: key_pins@0 {
-		pins = "PL3", "PL4";
-		function = "gpio_in";
-	};
-
-	wifi_pwrseq_pin_orangepi: wifi_pwrseq_pin@0 {
-		pins = "PL7";
-		function = "gpio_out";
-	};
-};
-
 &reg_usb1_vbus {
 	gpio = <&pio 6 13 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 };
 
-&sound_hdmi {
-	status = "okay";
-};
-
-&tcon0 {
-	status = "okay";
-};
-
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pa_pins>;
 	status = "okay";
 };
 

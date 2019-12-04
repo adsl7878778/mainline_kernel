@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * sca3000_core.c -- support VTI sca3000 series accelerometers via SPI
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
  *
  * Copyright (c) 2009 Jonathan Cameron <jic23@kernel.org>
  *
@@ -797,6 +794,7 @@ static int sca3000_write_raw(struct iio_dev *indio_dev,
 		mutex_lock(&st->lock);
 		ret = sca3000_write_3db_freq(st, val);
 		mutex_unlock(&st->lock);
+		return ret;
 	default:
 		return -EINVAL;
 	}
@@ -871,8 +869,9 @@ static int sca3000_read_event_value(struct iio_dev *indio_dev,
 				    enum iio_event_info info,
 				    int *val, int *val2)
 {
-	int ret, i;
 	struct sca3000_state *st = iio_priv(indio_dev);
+	long ret;
+	int i;
 
 	switch (info) {
 	case IIO_EV_INFO_VALUE:
@@ -884,11 +883,11 @@ static int sca3000_read_event_value(struct iio_dev *indio_dev,
 			return ret;
 		*val = 0;
 		if (chan->channel2 == IIO_MOD_Y)
-			for_each_set_bit(i, (unsigned long *)&ret,
+			for_each_set_bit(i, &ret,
 					 ARRAY_SIZE(st->info->mot_det_mult_y))
 				*val += st->info->mot_det_mult_y[i];
 		else
-			for_each_set_bit(i, (unsigned long *)&ret,
+			for_each_set_bit(i, &ret,
 					 ARRAY_SIZE(st->info->mot_det_mult_xz))
 				*val += st->info->mot_det_mult_xz[i];
 
@@ -1449,7 +1448,6 @@ static const struct iio_info sca3000_info = {
 	.write_event_value = &sca3000_write_event_value,
 	.read_event_config = &sca3000_read_event_config,
 	.write_event_config = &sca3000_write_event_config,
-	.driver_module = THIS_MODULE,
 };
 
 static int sca3000_probe(struct spi_device *spi)
@@ -1482,7 +1480,9 @@ static int sca3000_probe(struct spi_device *spi)
 	}
 	indio_dev->modes = INDIO_DIRECT_MODE;
 
-	sca3000_configure_ring(indio_dev);
+	ret = sca3000_configure_ring(indio_dev);
+	if (ret)
+		return ret;
 
 	if (spi->irq) {
 		ret = request_threaded_irq(spi->irq,

@@ -1,23 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * pci_dn.c
  *
  * Copyright (C) 2001 Todd Inglett, IBM Corporation
  *
  * PCI manipulation via device_nodes.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *    
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
  */
 #include <linux/kernel.h>
 #include <linux/pci.h>
@@ -156,10 +143,8 @@ static struct pci_dn *add_one_dev_pci_data(struct pci_dn *parent,
 	pdn->parent = parent;
 	pdn->busno = busno;
 	pdn->devfn = devfn;
-#ifdef CONFIG_PPC_POWERNV
 	pdn->vf_index = vf_index;
 	pdn->pe_number = IODA_INVALID_PE;
-#endif
 	INIT_LIST_HEAD(&pdn->child_list);
 	INIT_LIST_HEAD(&pdn->list);
 	list_add_tail(&pdn->list, &parent->child_list);
@@ -226,9 +211,7 @@ void remove_dev_pci_data(struct pci_dev *pdev)
 	 */
 	if (pdev->is_virtfn) {
 		pdn = pci_get_pdn(pdev);
-#ifdef CONFIG_PPC_POWERNV
 		pdn->pe_number = IODA_INVALID_PE;
-#endif
 		return;
 	}
 
@@ -294,9 +277,7 @@ struct pci_dn *pci_add_device_node_info(struct pci_controller *hose,
 		return NULL;
 	dn->data = pdn;
 	pdn->phb = hose;
-#ifdef CONFIG_PPC_POWERNV
 	pdn->pe_number = IODA_INVALID_PE;
-#endif
 	regs = of_get_property(dn, "reg", NULL);
 	if (regs) {
 		u32 addr = of_read_number(regs, 1);

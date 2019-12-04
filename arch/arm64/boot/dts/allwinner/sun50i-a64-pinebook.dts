@@ -1,43 +1,8 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright (c) 2016 ARM Ltd.
+ * Copyright (C) 2017 Icenowy Zheng <icenowy@aosc.xyz>
+ * Copyright (C) 2018 Vasily Khoruzhick <anarsoul@gmail.com>
  *
- * This file is dual-licensed: you can use it either under the terms
- * of the GPL or the X11 license, at your option. Note that this dual
- * licensing only applies to this file, and not this project as a
- * whole.
- *
- *  a) This library is free software; you can redistribute it and/or
- *     modify it under the terms of the GNU General Public License as
- *     published by the Free Software Foundation; either version 2 of the
- *     License, or (at your option) any later version.
- *
- *     This library is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- * Or, alternatively,
- *
- *  b) Permission is hereby granted, free of charge, to any person
- *     obtaining a copy of this software and associated documentation
- *     files (the "Software"), to deal in the Software without
- *     restriction, including without limitation the rights to use,
- *     copy, modify, merge, publish, distribute, sublicense, and/or
- *     sell copies of the Software, and to permit persons to whom the
- *     Software is furnished to do so, subject to the following
- *     conditions:
- *
- *     The above copyright notice and this permission notice shall be
- *     included in all copies or substantial portions of the Software.
- *
- *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- *     OTHER DEALINGS IN THE SOFTWARE.
  */
 
 /dts-v1/;
@@ -57,36 +22,88 @@
 		ethernet0 = &rtl8723cs;
 	};
 
+	vdd_bl: regulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "bl-3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pio 7 6 GPIO_ACTIVE_HIGH>; /* PH6 */
+		enable-active-high;
+	};
+
 	backlight: backlight {
 		compatible = "pwm-backlight";
 		pwms = <&pwm 0 50000 0>;
-		brightness-levels = <0 30 40 50 60 70 80 90 100>;
-		default-brightness-level = <6>;
+		brightness-levels = <0 5 10 15 20 30 40 55 70 85 100>;
+		default-brightness-level = <2>;
 		enable-gpios = <&pio 3 23 GPIO_ACTIVE_HIGH>; /* PD23 */
+		power-supply = <&vdd_bl>;
 	};
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+
+		framebuffer-lcd {
+			panel-supply = <&reg_dc1sw>;
+			dvdd25-supply = <&reg_dldo2>;
+			dvdd12-supply = <&reg_fldo1>;
+		};
 	};
 
-	gpio-keys {
+	gpio_keys {
 		compatible = "gpio-keys";
 
-		lid-switch {
+		lid_switch {
 			label = "Lid Switch";
 			gpios = <&r_pio 0 12 GPIO_ACTIVE_LOW>; /* PL12 */
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LID>;
 			linux,can-disable;
+			wakeup-source;
 		};
 	};
+
+	reg_vcc3v3: vcc3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+	};
+
+	wifi_pwrseq: wifi_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		reset-gpios = <&r_pio 0 2 GPIO_ACTIVE_LOW>; /* PL2 */
+	};
+
+	speaker_amp: audio-amplifier {
+		compatible = "simple-audio-amplifier";
+		/*
+		 * TODO This is actually a fixed regulator controlled by
+		 * the GPIO line on the PMIC. This should be corrected
+		 * once GPIO support is added for this PMIC.
+		 */
+		VCC-supply = <&reg_ldo_io0>;
+		enable-gpios = <&pio 7 7 GPIO_ACTIVE_HIGH>; /* PH7 */
+		sound-name-prefix = "Speaker Amp";
+	};
+
 };
 
-&ehci0 {
+&codec {
 	status = "okay";
 };
 
-&de {
+&codec_analog {
+	cpvdd-supply = <&reg_eldo1>;
+	status = "okay";
+};
+
+&dai {
+	status = "okay";
+};
+
+&ehci0 {
+	phys = <&usbphy 0>;
 	status = "okay";
 };
 
@@ -94,16 +111,11 @@
 	status = "okay";
 };
 
-&mixer0 {
-	status = "okay";
-};
-
 &mmc0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&mmc0_pins>;
 	vmmc-supply = <&reg_dcdc1>;
-	cd-gpios = <&pio 5 6 GPIO_ACTIVE_HIGH>;
-	cd-inverted;
+	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;
 	disable-wp;
 	bus-width = <4>;
 	status = "okay";
@@ -114,6 +126,7 @@
 	pinctrl-0 = <&mmc1_pins>;
 	vmmc-supply = <&reg_dldo4>;
 	vqmmc-supply = <&reg_eldo1>;
+	mmc-pwrseq = <&wifi_pwrseq>;
 	bus-width = <4>;
 	non-removable;
 	status = "okay";
@@ -125,16 +138,18 @@
 
 &mmc2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&mmc2_pins>;
+	pinctrl-0 = <&mmc2_pins>, <&mmc2_ds_pin>;
 	vmmc-supply = <&reg_dcdc1>;
-	vqmmc-supply = <&reg_dcdc1>;
+	vqmmc-supply = <&reg_eldo1>;
 	bus-width = <8>;
 	non-removable;
 	cap-mmc-hw-reset;
+	mmc-hs200-1_8v;
 	status = "okay";
 };
 
 &ohci0 {
+	phys = <&usbphy 0>;
 	status = "okay";
 };
 
@@ -143,30 +158,7 @@
 };
 
 &pwm {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pwm0_pins>;
 	status = "okay";
-};
-
-&r_i2c {
-	pinctrl-names = "default";
-	pinctrl-0 = <&r_i2c_pins_a>;
-	status = "okay";
-
-	anx6345: anx6345@38 {
-		compatible = "analogix,anx6345";
-		reg = <0x38>;
-		reset-gpios = <&pio 3 24 GPIO_ACTIVE_HIGH>; /* PD24 */
-		panel-supply = <&reg_dc1sw>;
-		dvdd25-supply = <&reg_dldo2>;
-		dvdd12-supply = <&reg_fldo1>;
-
-		port {
-			anx6345_in: endpoint {
-				remote-endpoint = <&tcon0_out_anx6345>;
-			};
-		};
-	};
 };
 
 &r_rsb {
@@ -178,6 +170,14 @@
 		interrupt-parent = <&r_intc>;
 		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
 	};
+};
+
+/* The ANX6345 eDP-bridge is on r_i2c */
+&r_i2c {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&r_i2c_pl89_pins>;
+	status = "okay";
 };
 
 #include "axp803.dtsi"
@@ -232,8 +232,8 @@
 
 &reg_dcdc5 {
 	regulator-always-on;
-	regulator-min-microvolt = <1500000>;
-	regulator-max-microvolt = <1500000>;
+	regulator-min-microvolt = <1200000>;
+	regulator-max-microvolt = <1200000>;
 	regulator-name = "vcc-dram";
 };
 
@@ -305,35 +305,41 @@
 	regulator-name = "vcc-rtc";
 };
 
-&simplefb_lcd {
-	vcc-lcd-supply = <&reg_dc1sw>;
-	edp-2v5-supply = <&reg_dldo2>;
-	edp-1v2-supply = <&reg_fldo1>;
+&simplefb_hdmi {
+	vcc-hdmi-supply = <&reg_dldo1>;
 };
 
-&tcon0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&lcd_rgb666_pins>;
-
+&sound {
 	status = "okay";
-};
-
-&tcon0_out {
-	tcon0_out_anx6345: endpoint@0 {
-		reg = <0>;
-		remote-endpoint = <&anx6345_in>;
-	};
+	simple-audio-card,aux-devs = <&codec_analog>, <&speaker_amp>;
+	simple-audio-card,widgets = "Microphone", "Internal Microphone Left",
+				    "Microphone", "Internal Microphone Right",
+				    "Headphone", "Headphone Jack",
+				    "Speaker", "Internal Speaker";
+	simple-audio-card,routing =
+			"Left DAC", "AIF1 Slot 0 Left",
+			"Right DAC", "AIF1 Slot 0 Right",
+			"Speaker Amp INL", "LINEOUT",
+			"Speaker Amp INR", "LINEOUT",
+			"Internal Speaker", "Speaker Amp OUTL",
+			"Internal Speaker", "Speaker Amp OUTR",
+			"Headphone Jack", "HP",
+			"AIF1 Slot 0 Left ADC", "Left ADC",
+			"AIF1 Slot 0 Right ADC", "Right ADC",
+			"Internal Microphone Left", "MBIAS",
+			"MIC1", "Internal Microphone Left",
+			"Internal Microphone Right", "HBIAS",
+			"MIC2", "Internal Microphone Right";
 };
 
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pb_pins>;
 	status = "okay";
 };
 
 &usb_otg {
 	dr_mode = "host";
-	status = "okay";
 };
 
 &usbphy {

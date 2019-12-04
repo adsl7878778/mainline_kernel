@@ -1,21 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * An RTC driver for Allwinner A10/A20
  *
  * Copyright (c) 2013, Carlo Caione <carlo.caione@gmail.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 #include <linux/delay.h>
@@ -36,8 +23,6 @@
 #define SUNXI_LOSC_CTRL				0x0000
 #define SUNXI_LOSC_CTRL_RTC_HMS_ACC		BIT(8)
 #define SUNXI_LOSC_CTRL_RTC_YMD_ACC		BIT(7)
-#define SUNXI_LOSC_OSC32K_SRC_SEL 		BIT(0)
-#define SUNXI_LOSC_KEY_VALUE			0x16aa0000
 
 #define SUNXI_RTC_YMD				0x0004
 
@@ -263,7 +248,7 @@ static int sunxi_rtc_gettime(struct device *dev, struct rtc_time *rtc_tm)
 	 */
 	rtc_tm->tm_year += SUNXI_YEAR_OFF(chip->data_year);
 
-	return rtc_valid_tm(rtc_tm);
+	return 0;
 }
 
 static int sunxi_rtc_setalarm(struct device *dev, struct rtc_wkalrm *wkalrm)
@@ -434,50 +419,6 @@ static const struct of_device_id sunxi_rtc_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, sunxi_rtc_dt_ids);
 
-/* As per page 126 of the A20 manual, the lowest bit in LOSC_CTRL_REG controls
- * the 32.768KHz clock source to use for the RTC. Using the clock_source sysfs
- * attribute, the clock can be selected between external (accurate 32kHz
- * crystal) and internal (seems to be an inaccurate RC oscillator) mode.  It
- * appears that this bit is non-volatile and will be kept in the RTC when the
- * system is powered off.
- */
-static ssize_t sunxi_rtc_show_clock_source(struct device *dev,
-					struct device_attribute *attr,
-					char *buf)
-{
-	struct sunxi_rtc_dev *chip = dev_get_drvdata(dev);
-	u32 val = readl(chip->base + SUNXI_LOSC_CTRL);
-	if (val & SUNXI_LOSC_OSC32K_SRC_SEL)
-		return sprintf(buf, "internal [external]\n");
-	else
-		return sprintf(buf, "[internal] external\n");
-}
-
-static ssize_t sunxi_rtc_store_clock_source(struct device *dev,
-					struct device_attribute *attr,
-					const char *buf, size_t count) {
-	struct sunxi_rtc_dev *chip = dev_get_drvdata(dev);
-	u32 val = readl(chip->base + SUNXI_LOSC_CTRL);
-
-	if (strncmp(buf, "external", 8) == 0)
-		val|=SUNXI_LOSC_OSC32K_SRC_SEL;
-	else if (strncmp(buf, "internal", 8) == 0)
-		val&=~SUNXI_LOSC_OSC32K_SRC_SEL;
-	else
-		return -EINVAL;
-
-        /* Writing this bit requires setting the upper 16 bit to 0x16aa (key
-	 * value). */
-	val |= SUNXI_LOSC_KEY_VALUE;
-
-	writel(val, chip->base + SUNXI_LOSC_CTRL);
-	return count;
-}
-
-static DEVICE_ATTR(clock_source, S_IRUGO | S_IWUSR,
-		sunxi_rtc_show_clock_source,
-		sunxi_rtc_store_clock_source);
-
 static int sunxi_rtc_probe(struct platform_device *pdev)
 {
 	struct sunxi_rtc_dev *chip;
@@ -490,6 +431,10 @@ static int sunxi_rtc_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, chip);
 	chip->dev = &pdev->dev;
+
+	chip->rtc = devm_rtc_allocate_device(&pdev->dev);
+	if (IS_ERR(chip->rtc))
+		return PTR_ERR(chip->rtc);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	chip->base = devm_ioremap_resource(&pdev->dev, res);
@@ -527,38 +472,21 @@ static int sunxi_rtc_probe(struct platform_device *pdev)
 	writel(SUNXI_ALRM_IRQ_STA_CNT_IRQ_PEND, chip->base +
 			SUNXI_ALRM_IRQ_STA);
 
-	chip->rtc = rtc_device_register("rtc-sunxi", &pdev->dev,
-			&sunxi_rtc_ops, THIS_MODULE);
-	if (IS_ERR(chip->rtc)) {
+	chip->rtc->ops = &sunxi_rtc_ops;
+
+	ret = rtc_register_device(chip->rtc);
+	if (ret) {
 		dev_err(&pdev->dev, "unable to register device\n");
-		return PTR_ERR(chip->rtc);
+		return ret;
 	}
 
 	dev_info(&pdev->dev, "RTC enabled\n");
 
-	ret = device_create_file(&pdev->dev, &dev_attr_clock_source);
-	if (ret) {
-		dev_err(&pdev->dev, "Unable to create sysfs entry: %s\n",
-			dev_attr_clock_source.attr.name);
-		return ret;
-	}
-
-	return 0;
-}
-
-static int sunxi_rtc_remove(struct platform_device *pdev)
-{
-	struct sunxi_rtc_dev *chip = platform_get_drvdata(pdev);
-
-	rtc_device_unregister(chip->rtc);
-
-	device_remove_file(&pdev->dev, &dev_attr_clock_source);
 	return 0;
 }
 
 static struct platform_driver sunxi_rtc_driver = {
 	.probe		= sunxi_rtc_probe,
-	.remove		= sunxi_rtc_remove,
 	.driver		= {
 		.name		= "sunxi-rtc",
 		.of_match_table = sunxi_rtc_dt_ids,

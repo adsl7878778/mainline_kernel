@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * STMicroelectronics pressures driver
  *
  * Copyright 2013 STMicroelectronics Inc.
  *
  * Denis Ciocca <denis.ciocca@st.com>
- *
- * Licensed under the GPL-2.
  */
 
 #include <linux/kernel.h>
@@ -40,6 +39,18 @@ static const struct of_device_id st_press_of_match[] = {
 	{
 		.compatible = "st,lps22hb-press",
 		.data = LPS22HB_PRESS_DEV_NAME,
+	},
+	{
+		.compatible = "st,lps33hw",
+		.data = LPS33HW_PRESS_DEV_NAME,
+	},
+	{
+		.compatible = "st,lps35hw",
+		.data = LPS35HW_PRESS_DEV_NAME,
+	},
+	{
+		.compatible = "st,lps22hh",
+		.data = LPS22HH_PRESS_DEV_NAME,
 	},
 	{},
 };
@@ -83,6 +94,9 @@ static const struct spi_device_id st_press_id_table[] = {
 	{ LPS25H_PRESS_DEV_NAME },
 	{ LPS331AP_PRESS_DEV_NAME },
 	{ LPS22HB_PRESS_DEV_NAME },
+	{ LPS33HW_PRESS_DEV_NAME },
+	{ LPS35HW_PRESS_DEV_NAME },
+	{ LPS22HH_PRESS_DEV_NAME },
 	{},
 };
 MODULE_DEVICE_TABLE(spi, st_press_id_table);

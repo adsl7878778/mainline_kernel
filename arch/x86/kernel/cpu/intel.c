@@ -66,6 +66,32 @@ void check_mpx_erratum(struct cpuinfo_x86 *c)
 	}
 }
 
+/*
+ * Processors which have self-snooping capability can handle conflicting
+ * memory type across CPUs by snooping its own cache. However, there exists
+ * CPU models in which having conflicting memory types still leads to
+ * unpredictable behavior, machine check errors, or hangs. Clear this
+ * feature to prevent its use on machines with known erratas.
+ */
+static void check_memory_type_self_snoop_errata(struct cpuinfo_x86 *c)
+{
+	switch (c->x86_model) {
+	case INTEL_FAM6_CORE_YONAH:
+	case INTEL_FAM6_CORE2_MEROM:
+	case INTEL_FAM6_CORE2_MEROM_L:
+	case INTEL_FAM6_CORE2_PENRYN:
+	case INTEL_FAM6_CORE2_DUNNINGTON:
+	case INTEL_FAM6_NEHALEM:
+	case INTEL_FAM6_NEHALEM_G:
+	case INTEL_FAM6_NEHALEM_EP:
+	case INTEL_FAM6_NEHALEM_EX:
+	case INTEL_FAM6_WESTMERE:
+	case INTEL_FAM6_WESTMERE_EP:
+	case INTEL_FAM6_SANDYBRIDGE:
+		setup_clear_cpu_cap(X86_FEATURE_SELFSNOOP);
+	}
+}
+
 static bool ring3mwait_disabled __read_mostly;
 
 static int __init ring3mwait_disable(char *__unused)
@@ -148,6 +174,9 @@ static bool bad_spectre_microcode(struct cpuinfo_x86 *c)
 	 * we may as well hope that it is running the correct version.
 	 */
 	if (cpu_has(c, X86_FEATURE_HYPERVISOR))
+		return false;
+
+	if (c->x86 != 6)
 		return false;
 
 	for (i = 0; i < ARRAY_SIZE(spectre_bad_microcodes); i++) {
@@ -301,6 +330,7 @@ static void early_init_intel(struct cpuinfo_x86 *c)
 	}
 
 	check_mpx_erratum(c);
+	check_memory_type_self_snoop_errata(c);
 
 	/*
 	 * Get the number of SMT siblings early from the extended topology
@@ -463,24 +493,6 @@ static void srat_detect_node(struct cpuinfo_x86 *c)
 #endif
 }
 
-/*
- * find out the number of processor cores on the die
- */
-static int intel_num_cpu_cores(struct cpuinfo_x86 *c)
-{
-	unsigned int eax, ebx, ecx, edx;
-
-	if (!IS_ENABLED(CONFIG_SMP) || c->cpuid_level < 4)
-		return 1;
-
-	/* Intel has a non-standard dependency on %ecx for this CPUID level. */
-	cpuid_count(4, 0, &eax, &ebx, &ecx, &edx);
-	if (eax & 0x1f)
-		return (eax >> 26) + 1;
-	else
-		return 1;
-}
-
 static void detect_vmx_virtcap(struct cpuinfo_x86 *c)
 {
 	/* Intel VMX MSR indicated features */
@@ -490,14 +502,17 @@ static void detect_vmx_virtcap(struct cpuinfo_x86 *c)
 #define X86_VMX_FEATURE_PROC_CTLS2_VIRT_APIC	0x00000001
 #define X86_VMX_FEATURE_PROC_CTLS2_EPT		0x00000002
 #define X86_VMX_FEATURE_PROC_CTLS2_VPID		0x00000020
+#define x86_VMX_FEATURE_EPT_CAP_AD		0x00200000
 
 	u32 vmx_msr_low, vmx_msr_high, msr_ctl, msr_ctl2;
+	u32 msr_vpid_cap, msr_ept_cap;
 
 	clear_cpu_cap(c, X86_FEATURE_TPR_SHADOW);
 	clear_cpu_cap(c, X86_FEATURE_VNMI);
 	clear_cpu_cap(c, X86_FEATURE_FLEXPRIORITY);
 	clear_cpu_cap(c, X86_FEATURE_EPT);
 	clear_cpu_cap(c, X86_FEATURE_VPID);
+	clear_cpu_cap(c, X86_FEATURE_EPT_AD);
 
 	rdmsr(MSR_IA32_VMX_PROCBASED_CTLS, vmx_msr_low, vmx_msr_high);
 	msr_ctl = vmx_msr_high | vmx_msr_low;
@@ -512,41 +527,100 @@ static void detect_vmx_virtcap(struct cpuinfo_x86 *c)
 		if ((msr_ctl2 & X86_VMX_FEATURE_PROC_CTLS2_VIRT_APIC) &&
 		    (msr_ctl & X86_VMX_FEATURE_PROC_CTLS_TPR_SHADOW))
 			set_cpu_cap(c, X86_FEATURE_FLEXPRIORITY);
-		if (msr_ctl2 & X86_VMX_FEATURE_PROC_CTLS2_EPT)
+		if (msr_ctl2 & X86_VMX_FEATURE_PROC_CTLS2_EPT) {
 			set_cpu_cap(c, X86_FEATURE_EPT);
+			rdmsr(MSR_IA32_VMX_EPT_VPID_CAP,
+			      msr_ept_cap, msr_vpid_cap);
+			if (msr_ept_cap & x86_VMX_FEATURE_EPT_CAP_AD)
+				set_cpu_cap(c, X86_FEATURE_EPT_AD);
+		}
 		if (msr_ctl2 & X86_VMX_FEATURE_PROC_CTLS2_VPID)
 			set_cpu_cap(c, X86_FEATURE_VPID);
 	}
 }
 
-static void init_intel_energy_perf(struct cpuinfo_x86 *c)
+#define MSR_IA32_TME_ACTIVATE		0x982
+
+/* Helpers to access TME_ACTIVATE MSR */
+#define TME_ACTIVATE_LOCKED(x)		(x & 0x1)
+#define TME_ACTIVATE_ENABLED(x)		(x & 0x2)
+
+#define TME_ACTIVATE_POLICY(x)		((x >> 4) & 0xf)	/* Bits 7:4 */
+#define TME_ACTIVATE_POLICY_AES_XTS_128	0
+
+#define TME_ACTIVATE_KEYID_BITS(x)	((x >> 32) & 0xf)	/* Bits 35:32 */
+
+#define TME_ACTIVATE_CRYPTO_ALGS(x)	((x >> 48) & 0xffff)	/* Bits 63:48 */
+#define TME_ACTIVATE_CRYPTO_AES_XTS_128	1
+
+/* Values for mktme_status (SW only construct) */
+#define MKTME_ENABLED			0
+#define MKTME_DISABLED			1
+#define MKTME_UNINITIALIZED		2
+static int mktme_status = MKTME_UNINITIALIZED;
+
+static void detect_tme(struct cpuinfo_x86 *c)
 {
-	u64 epb;
+	u64 tme_activate, tme_policy, tme_crypto_algs;
+	int keyid_bits = 0, nr_keyids = 0;
+	static u64 tme_activate_cpu0 = 0;
+
+	rdmsrl(MSR_IA32_TME_ACTIVATE, tme_activate);
+
+	if (mktme_status != MKTME_UNINITIALIZED) {
+		if (tme_activate != tme_activate_cpu0) {
+			/* Broken BIOS? */
+			pr_err_once("x86/tme: configuration is inconsistent between CPUs\n");
+			pr_err_once("x86/tme: MKTME is not usable\n");
+			mktme_status = MKTME_DISABLED;
+
+			/* Proceed. We may need to exclude bits from x86_phys_bits. */
+		}
+	} else {
+		tme_activate_cpu0 = tme_activate;
+	}
+
+	if (!TME_ACTIVATE_LOCKED(tme_activate) || !TME_ACTIVATE_ENABLED(tme_activate)) {
+		pr_info_once("x86/tme: not enabled by BIOS\n");
+		mktme_status = MKTME_DISABLED;
+		return;
+	}
+
+	if (mktme_status != MKTME_UNINITIALIZED)
+		goto detect_keyid_bits;
+
+	pr_info("x86/tme: enabled by BIOS\n");
+
+	tme_policy = TME_ACTIVATE_POLICY(tme_activate);
+	if (tme_policy != TME_ACTIVATE_POLICY_AES_XTS_128)
+		pr_warn("x86/tme: Unknown policy is active: %#llx\n", tme_policy);
+
+	tme_crypto_algs = TME_ACTIVATE_CRYPTO_ALGS(tme_activate);
+	if (!(tme_crypto_algs & TME_ACTIVATE_CRYPTO_AES_XTS_128)) {
+		pr_err("x86/mktme: No known encryption algorithm is supported: %#llx\n",
+				tme_crypto_algs);
+		mktme_status = MKTME_DISABLED;
+	}
+detect_keyid_bits:
+	keyid_bits = TME_ACTIVATE_KEYID_BITS(tme_activate);
+	nr_keyids = (1UL << keyid_bits) - 1;
+	if (nr_keyids) {
+		pr_info_once("x86/mktme: enabled by BIOS\n");
+		pr_info_once("x86/mktme: %d KeyIDs available\n", nr_keyids);
+	} else {
+		pr_info_once("x86/mktme: disabled by BIOS\n");
+	}
+
+	if (mktme_status == MKTME_UNINITIALIZED) {
+		/* MKTME is usable */
+		mktme_status = MKTME_ENABLED;
+	}
 
 	/*
-	 * Initialize MSR_IA32_ENERGY_PERF_BIAS if not already initialized.
-	 * (x86_energy_perf_policy(8) is available to change it at run-time.)
+	 * KeyID bits effectively lower the number of physical address
+	 * bits.  Update cpuinfo_x86::x86_phys_bits accordingly.
 	 */
-	if (!cpu_has(c, X86_FEATURE_EPB))
-		return;
-
-	rdmsrl(MSR_IA32_ENERGY_PERF_BIAS, epb);
-	if ((epb & 0xF) != ENERGY_PERF_BIAS_PERFORMANCE)
-		return;
-
-	pr_warn_once("ENERGY_PERF_BIAS: Set to 'normal', was 'performance'\n");
-	pr_warn_once("ENERGY_PERF_BIAS: View and update with x86_energy_perf_policy(8)\n");
-	epb = (epb & ~0xF) | ENERGY_PERF_BIAS_NORMAL;
-	wrmsrl(MSR_IA32_ENERGY_PERF_BIAS, epb);
-}
-
-static void intel_bsp_resume(struct cpuinfo_x86 *c)
-{
-	/*
-	 * MSR_IA32_ENERGY_PERF_BIAS is lost across suspend/resume,
-	 * so reinitialize it properly like during bootup:
-	 */
-	init_intel_energy_perf(c);
+	c->x86_phys_bits -= keyid_bits;
 }
 
 static void init_cpuid_fault(struct cpuinfo_x86 *c)
@@ -579,8 +653,6 @@ static void init_intel_misc_features(struct cpuinfo_x86 *c)
 
 static void init_intel(struct cpuinfo_x86 *c)
 {
-	unsigned int l2 = 0;
-
 	early_init_intel(c);
 
 	intel_workarounds(c);
@@ -597,19 +669,13 @@ static void init_intel(struct cpuinfo_x86 *c)
 		 * let's use the legacy cpuid vector 0x1 and 0x4 for topology
 		 * detection.
 		 */
-		c->x86_max_cores = intel_num_cpu_cores(c);
+		detect_num_cpu_cores(c);
 #ifdef CONFIG_X86_32
 		detect_ht(c);
 #endif
 	}
 
-	l2 = init_intel_cacheinfo(c);
-
-	/* Detect legacy cache sizes if init_intel_cacheinfo did not */
-	if (l2 == 0) {
-		cpu_detect_cache_sizes(c);
-		l2 = c->x86_cache_size;
-	}
+	init_intel_cacheinfo(c);
 
 	if (c->cpuid_level > 9) {
 		unsigned eax = cpuid_eax(10);
@@ -622,7 +688,8 @@ static void init_intel(struct cpuinfo_x86 *c)
 		set_cpu_cap(c, X86_FEATURE_LFENCE_RDTSC);
 
 	if (boot_cpu_has(X86_FEATURE_DS)) {
-		unsigned int l1;
+		unsigned int l1, l2;
+
 		rdmsr(MSR_IA32_MISC_ENABLE, l1, l2);
 		if (!(l1 & (1<<11)))
 			set_cpu_cap(c, X86_FEATURE_BTS);
@@ -650,6 +717,7 @@ static void init_intel(struct cpuinfo_x86 *c)
 	 * Dixon is NOT a Celeron.
 	 */
 	if (c->x86 == 6) {
+		unsigned int l2 = c->x86_cache_size;
 		char *p = NULL;
 
 		switch (c->x86_model) {
@@ -689,7 +757,8 @@ static void init_intel(struct cpuinfo_x86 *c)
 	if (cpu_has(c, X86_FEATURE_VMX))
 		detect_vmx_virtcap(c);
 
-	init_intel_energy_perf(c);
+	if (cpu_has(c, X86_FEATURE_TME))
+		detect_tme(c);
 
 	init_intel_misc_features(c);
 }
@@ -949,9 +1018,7 @@ static const struct cpu_dev intel_cpu_dev = {
 	.c_detect_tlb	= intel_detect_tlb,
 	.c_early_init   = early_init_intel,
 	.c_init		= init_intel,
-	.c_bsp_resume	= intel_bsp_resume,
 	.c_x86_vendor	= X86_VENDOR_INTEL,
 };
 
 cpu_dev_register(intel_cpu_dev);
-

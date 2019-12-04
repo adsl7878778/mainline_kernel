@@ -29,6 +29,7 @@
 #include <linux/random.h>
 #include <linux/export.h>
 #include <linux/init_task.h>
+#include <asm/cpu_mf.h>
 #include <asm/io.h>
 #include <asm/processor.h>
 #include <asm/vtimer.h>
@@ -36,6 +37,7 @@
 #include <asm/irq.h>
 #include <asm/nmi.h>
 #include <asm/smp.h>
+#include <asm/stacktrace.h>
 #include <asm/switch_to.h>
 #include <asm/runtime_instr.h>
 #include "entry.h"
@@ -44,26 +46,23 @@ asmlinkage void ret_from_fork(void) asm ("ret_from_fork");
 
 extern void kernel_thread_starter(void);
 
-/*
- * Free current thread data structures etc..
- */
-void exit_thread(struct task_struct *tsk)
-{
-	if (tsk == current)
-		exit_thread_gs();
-}
-
 void flush_thread(void)
 {
 }
 
-void release_thread(struct task_struct *dead_task)
+void arch_setup_new_exec(void)
 {
+	if (S390_lowcore.current_pid != current->pid) {
+		S390_lowcore.current_pid = current->pid;
+		if (test_facility(40))
+			lpp(&S390_lowcore.lpp);
+	}
 }
 
 void arch_release_task_struct(struct task_struct *tsk)
 {
 	runtime_instr_release(tsk);
+	guarded_storage_release(tsk);
 }
 
 int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)

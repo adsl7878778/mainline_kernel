@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2011-2018 Magewell Electronics Co., Ltd. (Nanjing)
  * All rights reserved.
@@ -15,6 +15,7 @@
 #include <linux/ioctl.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
@@ -40,50 +41,14 @@ struct sun6i_csi_dev {
 	int				planar_offset[3];
 };
 
-static const u32 supported_pixformats[] = {
-	V4L2_PIX_FMT_SBGGR8,
-	V4L2_PIX_FMT_SGBRG8,
-	V4L2_PIX_FMT_SGRBG8,
-	V4L2_PIX_FMT_SRGGB8,
-	V4L2_PIX_FMT_SBGGR10,
-	V4L2_PIX_FMT_SGBRG10,
-	V4L2_PIX_FMT_SGRBG10,
-	V4L2_PIX_FMT_SRGGB10,
-	V4L2_PIX_FMT_SBGGR12,
-	V4L2_PIX_FMT_SGBRG12,
-	V4L2_PIX_FMT_SGRBG12,
-	V4L2_PIX_FMT_SRGGB12,
-	V4L2_PIX_FMT_YUYV,
-	V4L2_PIX_FMT_YVYU,
-	V4L2_PIX_FMT_UYVY,
-	V4L2_PIX_FMT_VYUY,
-	V4L2_PIX_FMT_HM12,
-	V4L2_PIX_FMT_NV12,
-	V4L2_PIX_FMT_NV21,
-	V4L2_PIX_FMT_YUV420,
-	V4L2_PIX_FMT_YVU420,
-	V4L2_PIX_FMT_NV16,
-	V4L2_PIX_FMT_NV61,
-	V4L2_PIX_FMT_YUV422P,
-};
-
 static inline struct sun6i_csi_dev *sun6i_csi_to_dev(struct sun6i_csi *csi)
 {
 	return container_of(csi, struct sun6i_csi_dev, csi);
 }
 
-int sun6i_csi_get_supported_pixformats(struct sun6i_csi *csi,
-				       const u32 **pixformats)
-{
-	if (pixformats != NULL)
-		*pixformats = supported_pixformats;
-
-	return ARRAY_SIZE(supported_pixformats);
-}
-
 /* TODO add 10&12 bit YUV, RGB support */
-bool sun6i_csi_is_format_support(struct sun6i_csi *csi,
-				 u32 pixformat, u32 mbus_code)
+bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
+				   u32 pixformat, u32 mbus_code)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
 
@@ -93,7 +58,7 @@ bool sun6i_csi_is_format_support(struct sun6i_csi *csi,
 	 * Identify the media bus format from device tree.
 	 */
 	if ((sdev->csi.v4l2_ep.bus_type == V4L2_MBUS_PARALLEL
-	      || sdev->csi.v4l2_ep.bus_type == V4L2_MBUS_BT656)
+	     || sdev->csi.v4l2_ep.bus_type == V4L2_MBUS_BT656)
 	     && sdev->csi.v4l2_ep.bus.parallel.bus_width == 16) {
 		switch (pixformat) {
 		case V4L2_PIX_FMT_HM12:
@@ -179,6 +144,15 @@ bool sun6i_csi_is_format_support(struct sun6i_csi *csi,
 			break;
 		}
 		break;
+
+	case V4L2_PIX_FMT_RGB565:
+		return (mbus_code == MEDIA_BUS_FMT_RGB565_2X8_LE);
+	case V4L2_PIX_FMT_RGB565X:
+		return (mbus_code == MEDIA_BUS_FMT_RGB565_2X8_BE);
+
+	case V4L2_PIX_FMT_JPEG:
+		return (mbus_code == MEDIA_BUS_FMT_JPEG_1X8);
+
 	default:
 		dev_dbg(sdev->dev, "Unsupported pixformat: 0x%x\n", pixformat);
 		break;
@@ -190,6 +164,7 @@ bool sun6i_csi_is_format_support(struct sun6i_csi *csi,
 int sun6i_csi_set_power(struct sun6i_csi *csi, bool enable)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
+	struct device *dev = sdev->dev;
 	struct regmap *regmap = sdev->regmap;
 	int ret;
 
@@ -197,6 +172,9 @@ int sun6i_csi_set_power(struct sun6i_csi *csi, bool enable)
 		regmap_update_bits(regmap, CSI_EN_REG, CSI_EN_CSI_EN, 0);
 
 		clk_disable_unprepare(sdev->clk_ram);
+		if (of_device_is_compatible(dev->of_node,
+					    "allwinner,sun50i-a64-csi"))
+			clk_rate_exclusive_put(sdev->clk_mod);
 		clk_disable_unprepare(sdev->clk_mod);
 		reset_control_assert(sdev->rstc_bus);
 		return 0;
@@ -208,28 +186,39 @@ int sun6i_csi_set_power(struct sun6i_csi *csi, bool enable)
 		return ret;
 	}
 
+	if (of_device_is_compatible(dev->of_node, "allwinner,sun50i-a64-csi"))
+		clk_set_rate_exclusive(sdev->clk_mod, 300000000);
+
 	ret = clk_prepare_enable(sdev->clk_ram);
 	if (ret) {
 		dev_err(sdev->dev, "Enable clk_dram_csi clk err %d\n", ret);
-		return ret;
+		goto clk_mod_disable;
 	}
 
 	ret = reset_control_deassert(sdev->rstc_bus);
 	if (ret) {
 		dev_err(sdev->dev, "reset err %d\n", ret);
-		return ret;
+		goto clk_ram_disable;
 	}
 
 	regmap_update_bits(regmap, CSI_EN_REG, CSI_EN_CSI_EN, CSI_EN_CSI_EN);
 
 	return 0;
+
+clk_ram_disable:
+	clk_disable_unprepare(sdev->clk_ram);
+clk_mod_disable:
+	if (of_device_is_compatible(dev->of_node, "allwinner,sun50i-a64-csi"))
+		clk_rate_exclusive_put(sdev->clk_mod);
+	clk_disable_unprepare(sdev->clk_mod);
+	return ret;
 }
 
 static enum csi_input_fmt get_csi_input_format(struct sun6i_csi_dev *sdev,
 					       u32 mbus_code, u32 pixformat)
 {
-	/* bayer */
-	if ((mbus_code & 0xF000) == 0x3000)
+	/* non-YUV */
+	if ((mbus_code & 0xF000) != 0x2000)
 		return CSI_INPUT_FORMAT_RAW;
 
 	switch (pixformat) {
@@ -298,6 +287,14 @@ static enum csi_output_fmt get_csi_output_format(struct sun6i_csi_dev *sdev,
 	case V4L2_PIX_FMT_YUV422P:
 		return buf_interlaced ? CSI_FRAME_PLANAR_YUV422 :
 					CSI_FIELD_PLANAR_YUV422;
+
+	case V4L2_PIX_FMT_RGB565:
+	case V4L2_PIX_FMT_RGB565X:
+		return buf_interlaced ? CSI_FRAME_RGB565 : CSI_FIELD_RGB565;
+
+	case V4L2_PIX_FMT_JPEG:
+		return buf_interlaced ? CSI_FRAME_RAW_8 : CSI_FIELD_RAW_8;
+
 	default:
 		dev_warn(sdev->dev, "Unsupported pixformat: 0x%x\n", pixformat);
 		break;
@@ -309,6 +306,9 @@ static enum csi_output_fmt get_csi_output_format(struct sun6i_csi_dev *sdev,
 static enum csi_input_seq get_csi_input_seq(struct sun6i_csi_dev *sdev,
 					    u32 mbus_code, u32 pixformat)
 {
+	/* Input sequence does not apply to non-YUV formats */
+	if ((mbus_code & 0xF000) != 0x2000)
+		return 0;
 
 	switch (pixformat) {
 	case V4L2_PIX_FMT_HM12:
@@ -373,9 +373,16 @@ static enum csi_input_seq get_csi_input_seq(struct sun6i_csi_dev *sdev,
 static void sun6i_csi_setup_bus(struct sun6i_csi_dev *sdev)
 {
 	struct v4l2_fwnode_endpoint *endpoint = &sdev->csi.v4l2_ep;
+	struct sun6i_csi *csi = &sdev->csi;
 	unsigned char bus_width;
 	u32 flags;
 	u32 cfg;
+	bool input_interlaced = false;
+
+	if (csi->config.field == V4L2_FIELD_INTERLACED
+	    || csi->config.field == V4L2_FIELD_INTERLACED_TB
+	    || csi->config.field == V4L2_FIELD_INTERLACED_BT)
+		input_interlaced = true;
 
 	bus_width = endpoint->bus.parallel.bus_width;
 
@@ -384,7 +391,13 @@ static void sun6i_csi_setup_bus(struct sun6i_csi_dev *sdev)
 	cfg &= ~(CSI_IF_CFG_CSI_IF_MASK | CSI_IF_CFG_MIPI_IF_MASK |
 		 CSI_IF_CFG_IF_DATA_WIDTH_MASK |
 		 CSI_IF_CFG_CLK_POL_MASK | CSI_IF_CFG_VREF_POL_MASK |
-		 CSI_IF_CFG_HREF_POL_MASK | CSI_IF_CFG_FIELD_MASK);
+		 CSI_IF_CFG_HREF_POL_MASK | CSI_IF_CFG_FIELD_MASK |
+		 CSI_IF_CFG_SRC_TYPE_MASK);
+
+	if (input_interlaced)
+		cfg |= CSI_IF_CFG_SRC_TYPE_INTERLACED;
+	else
+		cfg |= CSI_IF_CFG_SRC_TYPE_PROGRESSED;
 
 	switch (endpoint->bus_type) {
 	case V4L2_MBUS_PARALLEL:
@@ -439,7 +452,7 @@ static void sun6i_csi_setup_bus(struct sun6i_csi_dev *sdev)
 	case 16: /* No need to configure DATA_WIDTH for 16bit */
 		break;
 	default:
-		dev_warn(sdev->dev, "Unsupported bus width: %d\n", bus_width);
+		dev_warn(sdev->dev, "Unsupported bus width: %u\n", bus_width);
 		break;
 	}
 
@@ -560,7 +573,7 @@ int sun6i_csi_update_config(struct sun6i_csi *csi,
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
 
-	if (config == NULL)
+	if (!config)
 		return -EINVAL;
 
 	memcpy(&csi->config, config, sizeof(csi->config));
@@ -614,44 +627,40 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
  * Media Controller and V4L2
  */
 static int sun6i_csi_link_entity(struct sun6i_csi *csi,
-				 struct media_entity *entity)
+				 struct media_entity *entity,
+				 struct fwnode_handle *fwnode)
 {
 	struct media_entity *sink;
 	struct media_pad *sink_pad;
+	int src_pad_index;
 	int ret;
-	int i;
 
-	if (!entity->num_pads) {
-		dev_err(csi->dev, "%s: invalid entity\n", entity->name);
-		return -EINVAL;
-	}
-
-	for (i = 0; i < entity->num_pads; i++) {
-		if (entity->pads[i].flags & MEDIA_PAD_FL_SOURCE)
-			break;
-	}
-
-	if (i == entity->num_pads) {
+	ret = media_entity_get_fwnode_pad(entity, fwnode, MEDIA_PAD_FL_SOURCE);
+	if (ret < 0) {
 		dev_err(csi->dev, "%s: no source pad in external entity %s\n",
 			__func__, entity->name);
 		return -EINVAL;
 	}
 
+	src_pad_index = ret;
+
 	sink = &csi->video.vdev.entity;
 	sink_pad = &csi->video.pad;
 
 	dev_dbg(csi->dev, "creating %s:%u -> %s:%u link\n",
-		entity->name, i, sink->name, sink_pad->index);
-	ret = media_create_pad_link(entity, i, sink, sink_pad->index,
-				    MEDIA_LNK_FL_ENABLED);
+		entity->name, src_pad_index, sink->name, sink_pad->index);
+	ret = media_create_pad_link(entity, src_pad_index, sink,
+				    sink_pad->index,
+				    MEDIA_LNK_FL_ENABLED |
+				    MEDIA_LNK_FL_IMMUTABLE);
 	if (ret < 0) {
 		dev_err(csi->dev, "failed to create %s:%u -> %s:%u link\n",
-			entity->name, i, sink->name, sink_pad->index);
+			entity->name, src_pad_index,
+			sink->name, sink_pad->index);
 		return ret;
 	}
 
-	return media_entity_call(sink, link_setup, sink_pad, &entity->pads[i],
-				 MEDIA_LNK_FL_ENABLED);
+	return 0;
 }
 
 static int sun6i_subdev_notify_complete(struct v4l2_async_notifier *notifier)
@@ -664,14 +673,11 @@ static int sun6i_subdev_notify_complete(struct v4l2_async_notifier *notifier)
 
 	dev_dbg(csi->dev, "notify complete, all subdevs registered\n");
 
-	if (notifier->num_subdevs != 1)
-		return -EINVAL;
-
 	sd = list_first_entry(&v4l2_dev->subdevs, struct v4l2_subdev, list);
-	if (sd == NULL)
+	if (!sd)
 		return -EINVAL;
 
-	ret = sun6i_csi_link_entity(csi, &sd->entity);
+	ret = sun6i_csi_link_entity(csi, &sd->entity, sd->fwnode);
 	if (ret < 0)
 		return ret;
 
@@ -682,30 +688,25 @@ static int sun6i_subdev_notify_complete(struct v4l2_async_notifier *notifier)
 	return media_device_register(&csi->media_dev);
 }
 
+static const struct v4l2_async_notifier_operations sun6i_csi_async_ops = {
+	.complete = sun6i_subdev_notify_complete,
+};
+
 static int sun6i_csi_fwnode_parse(struct device *dev,
-				  struct fwnode_handle *fwnode,
+				  struct v4l2_fwnode_endpoint *vep,
 				  struct v4l2_async_subdev *asd)
 {
 	struct sun6i_csi *csi = dev_get_drvdata(dev);
-	struct v4l2_fwnode_endpoint vep;
-	int ret;
 
-	ret = v4l2_fwnode_endpoint_parse(fwnode, &vep);
-	if (ret)
-		return ret;
-
-	dev_dbg(dev, "parsing endpoint %pOF, interface %u\n",
-			to_of_node(fwnode), vep.base.port);
-
-	if (vep.base.port || vep.base.id) {
+	if (vep->base.port || vep->base.id) {
 		dev_warn(dev, "Only support a single port with one endpoint\n");
 		return -ENOTCONN;
 	}
 
-	switch (vep.bus_type) {
+	switch (vep->bus_type) {
 	case V4L2_MBUS_PARALLEL:
 	case V4L2_MBUS_BT656:
-		csi->v4l2_ep = vep;
+		csi->v4l2_ep = *vep;
 		return 0;
 	default:
 		dev_err(dev, "Unsupported media bus type\n");
@@ -713,56 +714,14 @@ static int sun6i_csi_fwnode_parse(struct device *dev,
 	}
 }
 
-static int sun6i_csi_fwnodes_parse(struct device *dev,
-			     struct v4l2_async_notifier *notifier)
-{
-	struct fwnode_handle *fwnode = NULL;
-
-#define SUNXI_CSI_MAX_SUBDEVS		(1)
-	notifier->subdevs = devm_kcalloc(
-		dev, SUNXI_CSI_MAX_SUBDEVS, sizeof(*notifier->subdevs), GFP_KERNEL);
-	if (!notifier->subdevs)
-		return -ENOMEM;
-
-	while (notifier->num_subdevs < SUNXI_CSI_MAX_SUBDEVS &&
-	       (fwnode = fwnode_graph_get_next_endpoint(
-			of_fwnode_handle(dev->of_node), fwnode))) {
-		struct v4l2_async_subdev *asd;
-
-		asd = devm_kzalloc(dev, sizeof(*asd), GFP_KERNEL);
-		if (!asd)
-			goto error;
-
-		if (sun6i_csi_fwnode_parse(dev, fwnode, asd)) {
-			devm_kfree(dev, asd);
-			continue;
-		}
-
-		notifier->subdevs[notifier->num_subdevs] = asd;
-		asd->match.fwnode.fwnode =
-			fwnode_graph_get_remote_port_parent(fwnode);
-		if (!asd->match.fwnode.fwnode) {
-			dev_warn(dev, "bad remote port parent\n");
-			goto error;
-		}
-
-		asd->match_type = V4L2_ASYNC_MATCH_FWNODE;
-		notifier->num_subdevs++;
-	}
-
-	return notifier->num_subdevs;
-
-error:
-	fwnode_handle_put(fwnode);
-	return -EINVAL;
-}
-
 static void sun6i_csi_v4l2_cleanup(struct sun6i_csi *csi)
 {
+	media_device_unregister(&csi->media_dev);
 	v4l2_async_notifier_unregister(&csi->notifier);
+	v4l2_async_notifier_cleanup(&csi->notifier);
 	sun6i_video_cleanup(&csi->video);
 	v4l2_device_unregister(&csi->v4l2_dev);
-	media_device_unregister(&csi->media_dev);
+	v4l2_ctrl_handler_free(&csi->ctrl_handler);
 	media_device_cleanup(&csi->media_dev);
 }
 
@@ -771,11 +730,12 @@ static int sun6i_csi_v4l2_init(struct sun6i_csi *csi)
 	int ret;
 
 	csi->media_dev.dev = csi->dev;
-	strlcpy(csi->media_dev.model, "Allwinner Video Capture Device",
+	strscpy(csi->media_dev.model, "Allwinner Video Capture Device",
 		sizeof(csi->media_dev.model));
 	csi->media_dev.hw_revision = 0;
 
 	media_device_init(&csi->media_dev);
+	v4l2_async_notifier_init(&csi->notifier);
 
 	ret = v4l2_ctrl_handler_init(&csi->ctrl_handler, 0);
 	if (ret) {
@@ -790,18 +750,21 @@ static int sun6i_csi_v4l2_init(struct sun6i_csi *csi)
 	if (ret) {
 		dev_err(csi->dev, "V4L2 device registration failed (%d)\n",
 			ret);
-		goto clean_media;
+		goto free_ctrl;
 	}
 
 	ret = sun6i_video_init(&csi->video, csi, "sun6i-csi");
 	if (ret)
 		goto unreg_v4l2;
 
-	ret = sun6i_csi_fwnodes_parse(csi->dev, &csi->notifier);
-	if (ret < 0)
+	ret = v4l2_async_notifier_parse_fwnode_endpoints(csi->dev,
+							 &csi->notifier,
+							 sizeof(struct v4l2_async_subdev),
+							 sun6i_csi_fwnode_parse);
+	if (ret)
 		goto clean_video;
 
-	csi->notifier.complete = sun6i_subdev_notify_complete;
+	csi->notifier.ops = &sun6i_csi_async_ops;
 
 	ret = v4l2_async_notifier_register(&csi->v4l2_dev, &csi->notifier);
 	if (ret) {
@@ -815,7 +778,10 @@ clean_video:
 	sun6i_video_cleanup(&csi->video);
 unreg_v4l2:
 	v4l2_device_unregister(&csi->v4l2_dev);
+free_ctrl:
+	v4l2_ctrl_handler_free(&csi->ctrl_handler);
 clean_media:
+	v4l2_async_notifier_cleanup(&csi->notifier);
 	media_device_cleanup(&csi->media_dev);
 
 	return ret;
@@ -858,7 +824,7 @@ static const struct regmap_config sun6i_csi_regmap_config = {
 	.reg_bits       = 32,
 	.reg_stride     = 4,
 	.val_bits       = 32,
-	.max_register	= 0x1000,
+	.max_register	= 0x9c,
 };
 
 static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
@@ -875,7 +841,7 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 		return PTR_ERR(io_base);
 
 	sdev->regmap = devm_regmap_init_mmio_clk(&pdev->dev, "bus", io_base,
-					    &sun6i_csi_regmap_config);
+						 &sun6i_csi_regmap_config);
 	if (IS_ERR(sdev->regmap)) {
 		dev_err(&pdev->dev, "Failed to init register map\n");
 		return PTR_ERR(sdev->regmap);
@@ -912,14 +878,15 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 		dev_err(&pdev->dev, "Cannot request csi IRQ\n");
 		return ret;
 	}
+
 	return 0;
 }
 
 /*
  * PHYS_OFFSET isn't available on all architectures. In order to
- * accomodate for COMPILE_TEST, let's define it to something dumb.
+ * accommodate for COMPILE_TEST, let's define it to something dumb.
  */
-#ifndef PHYS_OFFSET
+#if defined(CONFIG_COMPILE_TEST) && !defined(PHYS_OFFSET)
 #define PHYS_OFFSET 0
 #endif
 
@@ -943,11 +910,7 @@ static int sun6i_csi_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, sdev);
 
 	sdev->csi.dev = &pdev->dev;
-	ret = sun6i_csi_v4l2_init(&sdev->csi);
-	if (ret)
-		return ret;
-
-	return 0;
+	return sun6i_csi_v4l2_init(&sdev->csi);
 }
 
 static int sun6i_csi_remove(struct platform_device *pdev)
@@ -961,7 +924,10 @@ static int sun6i_csi_remove(struct platform_device *pdev)
 
 static const struct of_device_id sun6i_csi_of_match[] = {
 	{ .compatible = "allwinner,sun6i-a31-csi", },
+	{ .compatible = "allwinner,sun8i-a83t-csi", },
+	{ .compatible = "allwinner,sun8i-h3-csi", },
 	{ .compatible = "allwinner,sun8i-v3s-csi", },
+	{ .compatible = "allwinner,sun50i-a64-csi", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, sun6i_csi_of_match);

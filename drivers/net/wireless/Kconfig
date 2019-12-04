@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Wireless LAN device configuration
 #
@@ -31,24 +32,19 @@ config WIRELESS_WDS
 	  necessary, give up on our plan of removing it).
 
 source "drivers/net/wireless/admtek/Kconfig"
-source "drivers/net/wireless/rtl8189es/Kconfig"
 source "drivers/net/wireless/ath/Kconfig"
-source "drivers/net/wireless/rtl8188eu/Kconfig"
 source "drivers/net/wireless/atmel/Kconfig"
 source "drivers/net/wireless/broadcom/Kconfig"
 source "drivers/net/wireless/cisco/Kconfig"
 source "drivers/net/wireless/intel/Kconfig"
 source "drivers/net/wireless/intersil/Kconfig"
 source "drivers/net/wireless/marvell/Kconfig"
-source "drivers/net/wireless/rtl8812au/Kconfig"
-source "drivers/net/wireless/rtl8814au/Kconfig"
 source "drivers/net/wireless/mediatek/Kconfig"
 source "drivers/net/wireless/ralink/Kconfig"
 source "drivers/net/wireless/realtek/Kconfig"
 source "drivers/net/wireless/rsi/Kconfig"
 source "drivers/net/wireless/st/Kconfig"
 source "drivers/net/wireless/ti/Kconfig"
-source "drivers/net/wireless/xradio/Kconfig"
 source "drivers/net/wireless/zydas/Kconfig"
 source "drivers/net/wireless/quantenna/Kconfig"
 
@@ -118,5 +114,12 @@ config USB_NET_RNDIS_WLAN
 	  only wireless RNDIS chip known to date.
 
 	  If you choose to build a module, it'll be called rndis_wlan.
+
+config VIRT_WIFI
+	tristate "Wifi wrapper for ethernet drivers"
+	depends on CFG80211
+	---help---
+	  This option adds support for ethernet connections to appear as if they
+	  are wifi connections through a special rtnetlink device.
 
 endif # WLAN

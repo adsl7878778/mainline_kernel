@@ -67,6 +67,17 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	connector {
+		compatible = "hdmi-connector";
+		type = "a";
+
+		port {
+			hdmi_con_in: endpoint {
+				remote-endpoint = <&hdmi_out_con>;
+			};
+		};
+	};
+
 	leds {
 		compatible = "gpio-leds";
 
@@ -125,10 +136,6 @@
 	status = "okay";
 };
 
-&cpu0 {
-	cpu-supply = <&vdd_cpu>;
-};
-
 &ehci0 {
 	status = "okay";
 };
@@ -154,20 +161,6 @@
 	status = "okay";
 };
 
-&hdmi {
-	status = "okay";
-};
-
-&i2s2 {
-	status = "okay";
-};
-
-&ir {
-	pinctrl-names = "default";
-	pinctrl-0 = <&ir_pins_a>;
-	status = "okay";
-};
-
 &external_mdio {
 	ext_rgmii_phy: ethernet-phy@1 {
 		compatible = "ethernet-phy-ieee802.3-c22";
@@ -175,13 +168,23 @@
 	};
 };
 
-&mixer0 {
+&hdmi {
+	status = "okay";
+};
+
+&hdmi_out {
+	hdmi_out_con: endpoint {
+		remote-endpoint = <&hdmi_con_in>;
+	};
+};
+
+&ir {
+	pinctrl-names = "default";
+	pinctrl-0 = <&r_ir_rx_pin>;
 	status = "okay";
 };
 
 &mmc0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
 	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
@@ -204,31 +207,21 @@
 	status = "okay";
 };
 
-&sound_hdmi {
-	status = "okay";
-};
-
-&tcon0 {
-	status = "okay";
-};
-
-&r_i2c {
+&spi0  {
 	status = "okay";
 
-	vdd_cpu: regulator@65 {
-		compatible = "silergy,sy8106a";
-		reg = <0x65>;
-		regulator-min-microvolt = <1000000>;
-		regulator-max-microvolt = <1400000>;
-		regulator-ramp-delay = <200>;
-		regulator-boot-on;
-		regulator-always-on;
+	flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <40000000>;
 	};
 };
 
 &uart0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pa_pins>;
 	status = "okay";
 };
 

@@ -1,19 +1,18 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * CPU-measurement facilities
  *
- *  Copyright IBM Corp. 2012
+ *  Copyright IBM Corp. 2012, 2018
  *  Author(s): Hendrik Brueckner <brueckner@linux.vnet.ibm.com>
  *	       Jan Glauber <jang@linux.vnet.ibm.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License (version 2 only)
- * as published by the Free Software Foundation.
  */
 #ifndef _ASM_S390_CPU_MF_H
 #define _ASM_S390_CPU_MF_H
 
 #include <linux/errno.h>
 #include <asm/facility.h>
+
+asm(".include \"asm/cpu_mf-insn.h\"\n");
 
 #define CPU_MF_INT_SF_IAE	(1 << 31)	/* invalid entry address */
 #define CPU_MF_INT_SF_ISE	(1 << 30)	/* incorrect SDBT entry */
@@ -32,12 +31,12 @@
 /* CPU measurement facility support */
 static inline int cpum_cf_avail(void)
 {
-	return MACHINE_HAS_LPP && test_facility(67);
+	return test_facility(40) && test_facility(67);
 }
 
 static inline int cpum_sf_avail(void)
 {
-	return MACHINE_HAS_LPP && test_facility(68);
+	return test_facility(40) && test_facility(68);
 }
 
 
@@ -142,9 +141,21 @@ struct hws_trailer_entry {
 	unsigned char timestamp[16];	 /* 16 - 31 timestamp		      */
 	unsigned long long reserved1;	 /* 32 -Reserved		      */
 	unsigned long long reserved2;	 /*				      */
-	unsigned long long progusage1;	 /* 48 - reserved for programming use */
-	unsigned long long progusage2;	 /*				      */
+	union {				 /* 48 - reserved for programming use */
+		struct {
+			unsigned int clock_base:1; /* in progusage2 */
+			unsigned long long progusage1:63;
+			unsigned long long progusage2;
+		};
+		unsigned long long progusage[2];
+	};
 } __packed;
+
+/* Load program parameter */
+static inline void lpp(void *pp)
+{
+	asm volatile(".insn s,0xb2800000,0(%0)\n":: "a" (pp) : "memory");
+}
 
 /* Query counter information */
 static inline int qctri(struct cpumf_ctr_info *info)
@@ -169,7 +180,7 @@ static inline int lcctl(u64 ctl)
 		"	.insn	s,0xb2840000,%1\n"
 		"	ipm	%0\n"
 		"	srl	%0,28\n"
-		: "=d" (cc) : "m" (ctl) : "cc");
+		: "=d" (cc) : "Q" (ctl) : "cc");
 	return cc;
 }
 
@@ -200,17 +211,25 @@ static inline int ecctr(u64 ctr, u64 *val)
 	return cc;
 }
 
-/* Store CPU counter multiple for the MT utilization counter set */
-static inline int stcctm5(u64 num, u64 *val)
+/* Store CPU counter multiple for a particular counter set */
+enum stcctm_ctr_set {
+	EXTENDED = 0,
+	BASIC = 1,
+	PROBLEM_STATE = 2,
+	CRYPTO_ACTIVITY = 3,
+	MT_DIAG = 5,
+	MT_DIAG_CLEARING = 9,	/* clears loss-of-MT-ctr-data alert */
+};
+static inline int stcctm(enum stcctm_ctr_set set, u64 range, u64 *dest)
 {
 	int cc;
 
 	asm volatile (
-		"	.insn	rsy,0xeb0000000017,%2,5,%1\n"
+		"	STCCTM	%2,%3,%1\n"
 		"	ipm	%0\n"
 		"	srl	%0,28\n"
 		: "=d" (cc)
-		: "Q" (*val), "d" (num)
+		: "Q" (*dest), "d" (range), "i" (set)
 		: "cc", "memory");
 	return cc;
 }

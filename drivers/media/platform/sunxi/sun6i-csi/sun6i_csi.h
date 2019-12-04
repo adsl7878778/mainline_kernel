@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2011-2018 Magewell Electronics Co., Ltd. (Nanjing)
  * All rights reserved.
@@ -49,23 +49,13 @@ struct sun6i_csi {
 };
 
 /**
- * sun6i_csi_get_supported_pixformats() - get csi supported pixformats
- * @csi:	pointer to the csi
- * @pixformats:	supported pixformats return from csi
- *
- * @return the count of pixformats or error(< 0)
- */
-int sun6i_csi_get_supported_pixformats(struct sun6i_csi *csi,
-				       const u32 **pixformats);
-
-/**
- * sun6i_csi_is_format_support() - check if the format supported by csi
+ * sun6i_csi_is_format_supported() - check if the format supported by csi
  * @csi:	pointer to the csi
  * @pixformat:	v4l2 pixel format (V4L2_PIX_FMT_*)
  * @mbus_code:	media bus format code (MEDIA_BUS_FMT_*)
  */
-bool sun6i_csi_is_format_support(struct sun6i_csi *csi, u32 pixformat,
-				 u32 mbus_code);
+bool sun6i_csi_is_format_supported(struct sun6i_csi *csi, u32 pixformat,
+				   u32 mbus_code);
 
 /**
  * sun6i_csi_set_power() - power on/off the csi
@@ -75,7 +65,7 @@ bool sun6i_csi_is_format_support(struct sun6i_csi *csi, u32 pixformat,
 int sun6i_csi_set_power(struct sun6i_csi *csi, bool enable);
 
 /**
- * sun6i_csi_update_config() - update the csi register setttings
+ * sun6i_csi_update_config() - update the csi register settings
  * @csi:	pointer to the csi
  * @config:	see struct sun6i_csi_config
  */
@@ -104,6 +94,7 @@ static inline int sun6i_csi_get_bpp(unsigned int pixformat)
 	case V4L2_PIX_FMT_SGBRG8:
 	case V4L2_PIX_FMT_SGRBG8:
 	case V4L2_PIX_FMT_SRGGB8:
+	case V4L2_PIX_FMT_JPEG:
 		return 8;
 	case V4L2_PIX_FMT_SBGGR10:
 	case V4L2_PIX_FMT_SGBRG10:
@@ -127,6 +118,8 @@ static inline int sun6i_csi_get_bpp(unsigned int pixformat)
 	case V4L2_PIX_FMT_NV16:
 	case V4L2_PIX_FMT_NV61:
 	case V4L2_PIX_FMT_YUV422P:
+	case V4L2_PIX_FMT_RGB565:
+	case V4L2_PIX_FMT_RGB565X:
 		return 16;
 	case V4L2_PIX_FMT_RGB24:
 	case V4L2_PIX_FMT_BGR24:
