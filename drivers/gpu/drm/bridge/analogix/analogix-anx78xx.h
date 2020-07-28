@@ -9,15 +9,8 @@
 #include "analogix-i2c-dptx.h"
 #include "analogix-i2c-txcommon.h"
 
-#define TX_P0				ANALOGIX_I2C_DPTX
-#define TX_P1				0x7a
-#define TX_P2				ANALOGIX_I2C_TXCOMMON
-
-#define RX_P0				0x7e
-#define RX_P1				0x80
-
 /***************************************************************/
-/* Register definition of device address 0x7e                  */
+/* Register definitions for RX_PO                              */
 /***************************************************************/
 
 /*
@@ -174,7 +167,7 @@
 #define SP_VSI_RCVD			BIT(1)
 
 /***************************************************************/
-/* Register definition of device address 0x80                  */
+/* Register definitions for RX_P1                              */
 /***************************************************************/
 
 /* HDCP BCAPS Shadow Register */
@@ -220,7 +213,7 @@
 #define SP_SET_AVMUTE			BIT(0)
 
 /***************************************************************/
-/* Register definition of device address 0x7a                  */
+/* Register definitions for TX_P1                              */
 /***************************************************************/
 
 /* DP TX Link Training Control Register */

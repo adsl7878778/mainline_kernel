@@ -107,6 +107,7 @@ struct bcm_device {
 	u32			oper_speed;
 	int			irq;
 	bool			irq_active_low;
+	bool			irq_acquired;
 
 #ifdef CONFIG_PM
 	struct hci_uart		*hu;
@@ -319,6 +320,8 @@ static int bcm_request_irq(struct bcm_data *bcm)
 		goto unlock;
 	}
 
+	bdev->irq_acquired = true;
+
 	device_init_wakeup(bdev->dev, true);
 
 	pm_runtime_set_autosuspend_delay(bdev->dev,
@@ -487,7 +490,7 @@ static int bcm_close(struct hci_uart *hu)
 	}
 
 	if (bdev) {
-		if (IS_ENABLED(CONFIG_PM) && bdev->irq > 0) {
+		if (IS_ENABLED(CONFIG_PM) && bdev->irq_acquired) {
 			devm_free_irq(bdev->dev, bdev->irq, bdev);
 			device_init_wakeup(bdev->dev, false);
 			pm_runtime_disable(bdev->dev);
@@ -824,6 +827,21 @@ unlock:
 }
 #endif
 
+/* Some firmware reports an IRQ which does not work (wrong pin in fw table?) */
+static const struct dmi_system_id bcm_broken_irq_dmi_table[] = {
+	{
+		.ident = "Meegopad T08",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_BOARD_VENDOR,
+					"To be filled by OEM."),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "T3 MRD"),
+			DMI_EXACT_MATCH(DMI_BOARD_VERSION, "V1.1"),
+		},
+	},
+	{ }
+};
+
+#ifdef CONFIG_ACPI
 static const struct acpi_gpio_params first_gpio = { 0, 0, false };
 static const struct acpi_gpio_params second_gpio = { 1, 0, false };
 static const struct acpi_gpio_params third_gpio = { 2, 0, false };
@@ -842,21 +860,6 @@ static const struct acpi_gpio_mapping acpi_bcm_int_first_gpios[] = {
 	{ },
 };
 
-/* Some firmware reports an IRQ which does not work (wrong pin in fw table?) */
-static const struct dmi_system_id bcm_broken_irq_dmi_table[] = {
-	{
-		.ident = "Meegopad T08",
-		.matches = {
-			DMI_EXACT_MATCH(DMI_BOARD_VENDOR,
-					"To be filled by OEM."),
-			DMI_EXACT_MATCH(DMI_BOARD_NAME, "T3 MRD"),
-			DMI_EXACT_MATCH(DMI_BOARD_VERSION, "V1.1"),
-		},
-	},
-	{ }
-};
-
-#ifdef CONFIG_ACPI
 static int bcm_resource(struct acpi_resource *ares, void *data)
 {
 	struct bcm_device *dev = data;

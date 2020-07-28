@@ -18,7 +18,6 @@
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/phy/phy.h>
-#include <linux/usb/of.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 
@@ -50,7 +49,7 @@
 #define SUNXI_LOS_BIAS(n)		((n) << 3)
 #define SUNXI_LOS_BIAS_MASK		GENMASK(5, 3)
 #define SUNXI_TXVBOOSTLVL(n)		((n) << 0)
-#define SUNXI_TXVBOOSTLVL_MASK		GENMASK(0, 2)
+#define SUNXI_TXVBOOSTLVL_MASK		GENMASK(2, 0)
 
 struct sun50i_usb3_phy {
 	struct phy *phy;
@@ -102,20 +101,16 @@ static int sun50i_usb3_phy_init(struct phy *_phy)
 
 	ret = clk_prepare_enable(phy->clk);
 	if (ret)
-		goto err_clk;
+		return ret;
 
 	ret = reset_control_deassert(phy->reset);
-	if (ret)
-		goto err_reset;
+	if (ret) {
+		clk_disable_unprepare(phy->clk);
+		return ret;
+	}
 
 	sun50i_usb3_phy_open(phy);
 	return 0;
-
-err_reset:
-	clk_disable_unprepare(phy->clk);
-
-err_clk:
-	return ret;
 }
 
 static int sun50i_usb3_phy_exit(struct phy *_phy)
@@ -190,6 +185,6 @@ static struct platform_driver sun50i_usb3_phy_driver = {
 };
 module_platform_driver(sun50i_usb3_phy_driver);
 
-MODULE_DESCRIPTION("Allwinner sun50i USB 3.0 phy driver");
+MODULE_DESCRIPTION("Allwinner H6 USB 3.0 phy driver");
 MODULE_AUTHOR("Icenowy Zheng <icenowy@aosc.io>");
 MODULE_LICENSE("GPL");

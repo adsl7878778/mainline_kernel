@@ -23,8 +23,6 @@
 #define SUNXI_LOSC_CTRL				0x0000
 #define SUNXI_LOSC_CTRL_RTC_HMS_ACC		BIT(8)
 #define SUNXI_LOSC_CTRL_RTC_YMD_ACC		BIT(7)
-#define SUNXI_LOSC_OSC32K_SRC_SEL 		BIT(0)
-#define SUNXI_LOSC_KEY_VALUE			0x16aa0000
 
 #define SUNXI_RTC_YMD				0x0004
 
@@ -421,50 +419,6 @@ static const struct of_device_id sunxi_rtc_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, sunxi_rtc_dt_ids);
 
-/* As per page 126 of the A20 manual, the lowest bit in LOSC_CTRL_REG controls
- * the 32.768KHz clock source to use for the RTC. Using the clock_source sysfs
- * attribute, the clock can be selected between external (accurate 32kHz
- * crystal) and internal (seems to be an inaccurate RC oscillator) mode.  It
- * appears that this bit is non-volatile and will be kept in the RTC when the
- * system is powered off.
- */
-static ssize_t sunxi_rtc_show_clock_source(struct device *dev,
-					struct device_attribute *attr,
-					char *buf)
-{
-	struct sunxi_rtc_dev *chip = dev_get_drvdata(dev);
-	u32 val = readl(chip->base + SUNXI_LOSC_CTRL);
-	if (val & SUNXI_LOSC_OSC32K_SRC_SEL)
-		return sprintf(buf, "internal [external]\n");
-	else
-		return sprintf(buf, "[internal] external\n");
-}
-
-static ssize_t sunxi_rtc_store_clock_source(struct device *dev,
-					struct device_attribute *attr,
-					const char *buf, size_t count) {
-	struct sunxi_rtc_dev *chip = dev_get_drvdata(dev);
-	u32 val = readl(chip->base + SUNXI_LOSC_CTRL);
-
-	if (strncmp(buf, "external", 8) == 0)
-		val|=SUNXI_LOSC_OSC32K_SRC_SEL;
-	else if (strncmp(buf, "internal", 8) == 0)
-		val&=~SUNXI_LOSC_OSC32K_SRC_SEL;
-	else
-		return -EINVAL;
-
-        /* Writing this bit requires setting the upper 16 bit to 0x16aa (key
-	 * value). */
-	val |= SUNXI_LOSC_KEY_VALUE;
-
-	writel(val, chip->base + SUNXI_LOSC_CTRL);
-	return count;
-}
-
-static DEVICE_ATTR(clock_source, S_IRUGO | S_IWUSR,
-		sunxi_rtc_show_clock_source,
-		sunxi_rtc_store_clock_source);
-
 static int sunxi_rtc_probe(struct platform_device *pdev)
 {
 	struct sunxi_rtc_dev *chip;
@@ -488,10 +442,8 @@ static int sunxi_rtc_probe(struct platform_device *pdev)
 		return PTR_ERR(chip->base);
 
 	chip->irq = platform_get_irq(pdev, 0);
-	if (chip->irq < 0) {
-		dev_err(&pdev->dev, "No IRQ resource\n");
+	if (chip->irq < 0)
 		return chip->irq;
-	}
 	ret = devm_request_irq(&pdev->dev, chip->irq, sunxi_rtc_alarmirq,
 			0, dev_name(&pdev->dev), chip);
 	if (ret) {
@@ -520,22 +472,7 @@ static int sunxi_rtc_probe(struct platform_device *pdev)
 
 	chip->rtc->ops = &sunxi_rtc_ops;
 
-	ret = rtc_register_device(chip->rtc);
-	if (ret) {
-		dev_err(&pdev->dev, "unable to register device\n");
-		return ret;
-	}
-
-	dev_info(&pdev->dev, "RTC enabled\n");
-
-	ret = device_create_file(&pdev->dev, &dev_attr_clock_source);
-	if (ret) {
-		dev_err(&pdev->dev, "Unable to create sysfs entry: %s\n",
-			dev_attr_clock_source.attr.name);
-		return ret;
-	}
-
-	return 0;
+	return rtc_register_device(chip->rtc);
 }
 
 static struct platform_driver sunxi_rtc_driver = {

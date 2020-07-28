@@ -348,7 +348,9 @@ rtw_cfg80211_default_mgmt_stypes[NUM_NL80211_IFTYPES] = {
 
 static u64 rtw_get_systime_us(void)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,20,0))
+	return (u64)ktime_to_us(ktime_get_boottime());
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
 	struct timespec ts;
 	get_monotonic_boottime(&ts);
 	return ((u64)ts.tv_sec*1000000) + ts.tv_nsec / 1000;
@@ -3614,7 +3616,9 @@ void rtw_cfg80211_indicate_sta_assoc(_adapter *padapter, u8 *pmgmt_frame, uint f
 			ie_offset = _REASOCREQ_IE_OFFSET_;
 	
 		sinfo.filled = 0;
+		#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0))
 		sinfo.pertid = 0;
+		#endif
 // cf commit 319090bf6c75e3ad42a8c
 //		sinfo.filled = STATION_INFO_ASSOC_REQ_IES;
 		sinfo.assoc_req_ies = pmgmt_frame + WLAN_HDR_A3_LEN + ie_offset;
@@ -4451,7 +4455,8 @@ static int	cfg80211_rtw_change_station(struct wiphy *wiphy, struct net_device *n
 
 struct sta_info *rtw_sta_info_get_by_idx(const int idx, struct sta_priv *pstapriv)
 
-{
+{
+
 	_list	*phead, *plist;
 	struct sta_info *psta = NULL;
 	int i = 0;

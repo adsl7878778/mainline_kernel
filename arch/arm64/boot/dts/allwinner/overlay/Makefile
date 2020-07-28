@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 dtbo-$(CONFIG_ARCH_SUNXI) += \
+	sun50i-a64-boe-hb140wx1-501.dtbo \
 	sun50i-a64-i2c0.dtbo \
 	sun50i-a64-i2c1.dtbo \
 	sun50i-a64-pps-gpio.dtbo \
@@ -13,6 +14,8 @@ dtbo-$(CONFIG_ARCH_SUNXI) += \
 	sun50i-a64-w1-gpio.dtbo \
 	sun50i-h5-analog-codec.dtbo \
 	sun50i-h5-cir.dtbo \
+	sun50i-h5-cpu-clock-1.0GHz-1.1v.dtbo \
+	sun50i-h5-cpu-clock-1.2GHz-1.3v.dtbo \
 	sun50i-h5-cpu-clock-1.3GHz-1.3v.dtbo \
 	sun50i-h5-gpio-regulator-1.3v.dtbo \
 	sun50i-h5-i2c0.dtbo \
@@ -53,3 +56,8 @@ scr-$(CONFIG_ARCH_SUNXI) += \
 dtbotxt-$(CONFIG_ARCH_SUNXI) += \
 	README.sun50i-a64-overlays \
 	README.sun50i-h5-overlays
+
+targets += $(dtbo-y) $(scr-y) $(dtbotxt-y)
+
+always		:= $(dtbo-y) $(scr-y) $(dtbotxt-y)
+clean-files	:= *.dtbo *.scr

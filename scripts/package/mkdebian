@@ -94,9 +94,10 @@ else
 	packageversion=$version-$revision
 fi
 sourcename=$KDEB_SOURCENAME
-packagename=linux-image-dev$LOCALVERSION
-kernel_headers_packagename=linux-headers-dev$LOCALVERSION
-dtb_packagename=linux-dtb-dev$LOCALVERSION
+packagename=linux-image-$BRANCH$LOCALVERSION
+kernel_headers_packagename=linux-headers-$BRANCH$LOCALVERSION
+libc_headers_packagename=linux-libc-dev-$BRANCH$LOCALVERSION
+dtb_packagename=linux-dtb-$BRANCH$LOCALVERSION
 dbg_packagename=$packagename-dbg
 debarch=
 image_name=
@@ -138,7 +139,7 @@ mkdir -p debian/source/
 echo "1.0" > debian/source/format
 
 echo $debarch > debian/arch
-extra_build_depends=", $(if_enabled_echo CONFIG_UNWINDER_ORC libelf-dev)"
+extra_build_depends=", $(if_enabled_echo CONFIG_UNWINDER_ORC libelf-dev:native)"
 extra_build_depends="$extra_build_depends, $(if_enabled_echo CONFIG_SYSTEM_TRUSTED_KEYRING libssl-dev:native)"
 
 # Generate a simple changelog template
@@ -176,7 +177,7 @@ Source: $sourcename
 Section: kernel
 Priority: optional
 Maintainer: $maintainer
-Build-Depends: bc, kmod, cpio, bison, flex | flex:native $extra_build_depends
+Build-Depends: bc, rsync, kmod, cpio, bison, flex | flex:native $extra_build_depends
 Homepage: http://www.kernel.org/
 
 Package: $packagename
@@ -187,12 +188,13 @@ Description: Linux kernel, version $version
 
 Package: $kernel_headers_packagename
 Architecture: $debarch
+Depends: make, gcc, libc6-dev, bison, flex, libssl-dev
 Description: Linux kernel headers for $version on $debarch
  This package provides kernel header files for $version on $debarch
  .
  This is useful for people who need to build external modules
 
-Package: linux-libc-dev
+Package: $libc_headers_packagename
 Section: devel
 Provides: linux-kernel-headers
 Architecture: $debarch

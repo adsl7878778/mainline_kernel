@@ -43,6 +43,7 @@
 /dts-v1/;
 
 #include "sun50i-a64.dtsi"
+#include "sun50i-a64-cpu-opp.dtsi"
 
 #include <dt-bindings/gpio/gpio.h>
 
@@ -99,6 +100,22 @@
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&r_pio 0 2 GPIO_ACTIVE_LOW>; /* PL2 */
 	};
+};
+
+&cpu0 {
+	cpu-supply = <&reg_dcdc2>;
+};
+
+&cpu1 {
+	cpu-supply = <&reg_dcdc2>;
+};
+
+&cpu2 {
+	cpu-supply = <&reg_dcdc2>;
+};
+
+&cpu3 {
+	cpu-supply = <&reg_dcdc2>;
 };
 
 &de {
@@ -314,4 +331,37 @@
 
 &usbphy {
 	status = "okay";
+};
+
+&sound {
+status = "okay";
+};
+
+&sound_hdmi {
+status = "okay";
+};
+
+&usb_otg {
+dr_mode = "host";
+status = "okay";
+};
+
+&i2s1 {
+status = "okay";
+};
+
+&i2s2 {
+status = "okay";
+};
+
+&dai {
+status = "okay";
+};
+
+&codec {
+status = "okay";
+};
+
+&codec_analog {
+status = "okay";
 };

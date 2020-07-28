@@ -158,8 +158,8 @@ static const int ov5640_framerates[] = {
 /* regulator supplies */
 static const char * const ov5640_supply_name[] = {
 	"DOVDD", /* Digital I/O (1.8V) supply */
-	"DVDD",  /* Digital Core (1.5V) supply */
 	"AVDD",  /* Analog (2.8V) supply */
+	"DVDD",  /* Digital Core (1.5V) supply */
 };
 
 #define OV5640_NUM_SUPPLIES ARRAY_SIZE(ov5640_supply_name)
@@ -227,8 +227,6 @@ struct ov5640_dev {
 	struct regulator_bulk_data supplies[OV5640_NUM_SUPPLIES];
 	struct gpio_desc *reset_gpio;
 	struct gpio_desc *pwdn_gpio;
-        struct gpio_desc  *pwen_gpio;
-        struct gpio_desc  *csien_gpio;
 	bool   upside_down;
 
 	/* lock to protect all members below */
@@ -876,7 +874,7 @@ static unsigned long ov5640_calc_sys_clk(struct ov5640_dev *sensor,
 			 * We have reached the maximum allowed PLL1 output,
 			 * increase sysdiv.
 			 */
-			if (!rate)
+			if (!_rate)
 				break;
 
 			/*
@@ -1613,6 +1611,11 @@ ov5640_find_mode(struct ov5640_dev *sensor, enum ov5640_frame_rate fr,
 	    !(mode->hact == 640 && mode->vact == 480))
 		return NULL;
 
+	/* 2592x1944 only works at 15fps max */
+	if ((mode->hact == 2592 && mode->vact == 1944) &&
+	    fr > OV5640_15_FPS)
+		return NULL;
+
 	return mode;
 }
 
@@ -1924,7 +1927,8 @@ static void ov5640_reset(struct ov5640_dev *sensor)
 {
 	if (!sensor->reset_gpio)
 		return;
-	gpiod_set_value_cansleep(sensor->reset_gpio, 0);//0->1
+
+	gpiod_set_value_cansleep(sensor->reset_gpio, 0);
 
 	/* camera power cycle */
 	ov5640_power(sensor, false);
@@ -1932,10 +1936,10 @@ static void ov5640_reset(struct ov5640_dev *sensor)
 	ov5640_power(sensor, true);
 	usleep_range(5000, 10000);
 
-	gpiod_set_value_cansleep(sensor->reset_gpio, 1);//1->0
+	gpiod_set_value_cansleep(sensor->reset_gpio, 1);
 	usleep_range(1000, 2000);
 
-	gpiod_set_value_cansleep(sensor->reset_gpio, 0);//0->1
+	gpiod_set_value_cansleep(sensor->reset_gpio, 0);
 	usleep_range(20000, 25000);
 }
 
@@ -1944,7 +1948,6 @@ static int ov5640_set_power_on(struct ov5640_dev *sensor)
 	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 
-         usleep_range(1000,1200);
 	ret = clk_prepare_enable(sensor->xclk);
 	if (ret) {
 		dev_err(&client->dev, "%s: failed to enable clock\n",
@@ -2938,8 +2941,7 @@ power_off:
 	return ret;
 }
 
-static int ov5640_probe(struct i2c_client *client,
-			const struct i2c_device_id *id)
+static int ov5640_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct fwnode_handle *endpoint;
@@ -3020,18 +3022,18 @@ static int ov5640_probe(struct i2c_client *client,
 			sensor->xclk_freq);
 		return -EINVAL;
 	}
-	sensor->csien_gpio = devm_gpiod_get_optional(dev, "csien",
-						     GPIOD_OUT_HIGH);//203
-	sensor->pwen_gpio = devm_gpiod_get_optional(dev, "poweren",
-						    GPIOD_OUT_HIGH);//17
 
 	/* request optional power down pin */
 	sensor->pwdn_gpio = devm_gpiod_get_optional(dev, "powerdown",
 						    GPIOD_OUT_HIGH);
+	if (IS_ERR(sensor->pwdn_gpio))
+		return PTR_ERR(sensor->pwdn_gpio);
+
 	/* request optional reset pin */
 	sensor->reset_gpio = devm_gpiod_get_optional(dev, "reset",
 						     GPIOD_OUT_HIGH);
-
+	if (IS_ERR(sensor->reset_gpio))
+		return PTR_ERR(sensor->reset_gpio);
 
 	v4l2_i2c_subdev_init(&sensor->sd, client, &ov5640_subdev_ops);
 
@@ -3057,7 +3059,7 @@ static int ov5640_probe(struct i2c_client *client,
 	if (ret)
 		goto entity_cleanup;
 
-	ret = v4l2_async_register_subdev(&sensor->sd);
+	ret = v4l2_async_register_subdev_sensor_common(&sensor->sd);
 	if (ret)
 		goto free_ctrls;
 
@@ -3066,8 +3068,8 @@ static int ov5640_probe(struct i2c_client *client,
 free_ctrls:
 	v4l2_ctrl_handler_free(&sensor->ctrls.handler);
 entity_cleanup:
-	mutex_destroy(&sensor->lock);
 	media_entity_cleanup(&sensor->sd.entity);
+	mutex_destroy(&sensor->lock);
 	return ret;
 }
 
@@ -3077,9 +3079,9 @@ static int ov5640_remove(struct i2c_client *client)
 	struct ov5640_dev *sensor = to_ov5640_dev(sd);
 
 	v4l2_async_unregister_subdev(&sensor->sd);
-	mutex_destroy(&sensor->lock);
 	media_entity_cleanup(&sensor->sd.entity);
 	v4l2_ctrl_handler_free(&sensor->ctrls.handler);
+	mutex_destroy(&sensor->lock);
 
 	return 0;
 }
@@ -3102,7 +3104,7 @@ static struct i2c_driver ov5640_i2c_driver = {
 		.of_match_table	= ov5640_dt_ids,
 	},
 	.id_table = ov5640_id,
-	.probe    = ov5640_probe,
+	.probe_new = ov5640_probe,
 	.remove   = ov5640_remove,
 };
 

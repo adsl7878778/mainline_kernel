@@ -470,6 +470,15 @@ static void ctr_read_handler(unsigned int esr, struct pt_regs *regs)
 	int rt = ESR_ELx_SYS64_ISS_RT(esr);
 	unsigned long val = arm64_ftr_reg_user_value(&arm64_ftr_reg_ctrel0);
 
+	if (cpus_have_const_cap(ARM64_WORKAROUND_1542419)) {
+		/* Hide DIC so that we can trap the unnecessary maintenance...*/
+		val &= ~BIT(CTR_DIC_SHIFT);
+
+		/* ... and fake IminLine to reduce the number of traps. */
+		val &= ~CTR_IMINLINE_MASK;
+		val |= (PAGE_SHIFT - 2) & CTR_IMINLINE_MASK;
+	}
+
 	pt_regs_write_reg(regs, rt, val);
 
 	arm64_skip_faulting_instruction(regs, AARCH64_INSN_SIZE);
@@ -513,7 +522,7 @@ struct sys64_hook {
 	void (*handler)(unsigned int esr, struct pt_regs *regs);
 };
 
-static struct sys64_hook sys64_hooks[] = {
+static const struct sys64_hook sys64_hooks[] = {
 	{
 		.esr_mask = ESR_ELx_SYS64_ISS_EL0_CACHE_OP_MASK,
 		.esr_val = ESR_ELx_SYS64_ISS_EL0_CACHE_OP_VAL,
@@ -638,7 +647,7 @@ static void compat_cntfrq_read_handler(unsigned int esr, struct pt_regs *regs)
 	arm64_compat_skip_faulting_instruction(regs, 4);
 }
 
-static struct sys64_hook cp15_32_hooks[] = {
+static const struct sys64_hook cp15_32_hooks[] = {
 	{
 		.esr_mask = ESR_ELx_CP15_32_ISS_SYS_MASK,
 		.esr_val = ESR_ELx_CP15_32_ISS_SYS_CNTFRQ,
@@ -658,7 +667,7 @@ static void compat_cntvct_read_handler(unsigned int esr, struct pt_regs *regs)
 	arm64_compat_skip_faulting_instruction(regs, 4);
 }
 
-static struct sys64_hook cp15_64_hooks[] = {
+static const struct sys64_hook cp15_64_hooks[] = {
 	{
 		.esr_mask = ESR_ELx_CP15_64_ISS_SYS_MASK,
 		.esr_val = ESR_ELx_CP15_64_ISS_SYS_CNTVCT,
@@ -669,7 +678,7 @@ static struct sys64_hook cp15_64_hooks[] = {
 
 asmlinkage void __exception do_cp15instr(unsigned int esr, struct pt_regs *regs)
 {
-	struct sys64_hook *hook, *hook_base;
+	const struct sys64_hook *hook, *hook_base;
 
 	if (!cp15_cond_valid(esr, regs)) {
 		/*
@@ -709,7 +718,7 @@ asmlinkage void __exception do_cp15instr(unsigned int esr, struct pt_regs *regs)
 
 asmlinkage void __exception do_sysinstr(unsigned int esr, struct pt_regs *regs)
 {
-	struct sys64_hook *hook;
+	const struct sys64_hook *hook;
 
 	for (hook = sys64_hooks; hook->handler; hook++)
 		if ((hook->esr_mask & esr) == hook->esr_val) {
@@ -746,6 +755,7 @@ static const char *esr_class_str[] = {
 	[ESR_ELx_EC_SMC64]		= "SMC (AArch64)",
 	[ESR_ELx_EC_SYS64]		= "MSR/MRS (AArch64)",
 	[ESR_ELx_EC_SVE]		= "SVE",
+	[ESR_ELx_EC_ERET]		= "ERET/ERETAA/ERETAB",
 	[ESR_ELx_EC_IMP_DEF]		= "EL3 IMP DEF",
 	[ESR_ELx_EC_IABT_LOW]		= "IABT (lower EL)",
 	[ESR_ELx_EC_IABT_CUR]		= "IABT (current EL)",

@@ -68,8 +68,8 @@ if test "${param_w1_pin_int_pullup}" = "1"; then
 fi
 
 if test "${param_uart1_rtscts}" = "1"; then
-	fdt get value tmp_phandle1 /soc/pinctrl@1c20800/uart1 phandle
-	fdt get value tmp_phandle2 /soc/pinctrl@1c20800/uart1_rts_cts_pins phandle
+	fdt get value tmp_phandle1 /soc/pinctrl@1c20800/uart1-pins phandle
+	fdt get value tmp_phandle2 /soc/pinctrl@1c20800/uart1-rts-cts-pins phandle
 	fdt set /soc/serial@1c28400 pinctrl-names "default" "default"
 	fdt set /soc/serial@1c28400 pinctrl-0 "<${tmp_phandle1}>"
 	fdt set /soc/serial@1c28400 pinctrl-1 "<${tmp_phandle2}>"
@@ -77,8 +77,8 @@ if test "${param_uart1_rtscts}" = "1"; then
 fi
 
 if test "${param_uart2_rtscts}" = "1"; then
-	fdt get value tmp_phandle1 /soc/pinctrl@1c20800/uart2 phandle
-	fdt get value tmp_phandle2 /soc/pinctrl@1c20800/uart2_rts_cts_pins phandle
+	fdt get value tmp_phandle1 /soc/pinctrl@1c20800/uart2-pins phandle
+	fdt get value tmp_phandle2 /soc/pinctrl@1c20800/uart2-rts-cts-pins phandle
 	fdt set /soc/serial@1c28800 pinctrl-names "default" "default"
 	fdt set /soc/serial@1c28800 pinctrl-0 "<${tmp_phandle1}>"
 	fdt set /soc/serial@1c28800 pinctrl-1 "<${tmp_phandle2}>"
@@ -86,8 +86,8 @@ if test "${param_uart2_rtscts}" = "1"; then
 fi
 
 if test "${param_uart4_rtscts}" = "1"; then
-	fdt get value tmp_phandle1 /soc/pinctrl@1c20800/uart4 phandle
-	fdt get value tmp_phandle2 /soc/pinctrl@1c20800/uart4_rts_cts phandle
+	fdt get value tmp_phandle1 /soc/pinctrl@1c20800/uart4-pins phandle
+	fdt get value tmp_phandle2 /soc/pinctrl@1c20800/uart4-rts-cts-pins phandle
 	fdt set /soc/serial@1c29000 pinctrl-names "default" "default"
 	fdt set /soc/serial@1c29000 pinctrl-0 "<${tmp_phandle1}>"
 	fdt set /soc/serial@1c29000 pinctrl-1 "<${tmp_phandle2}>"

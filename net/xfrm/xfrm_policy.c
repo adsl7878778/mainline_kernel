@@ -431,7 +431,9 @@ EXPORT_SYMBOL(xfrm_policy_destroy);
 
 static void xfrm_policy_kill(struct xfrm_policy *policy)
 {
+	write_lock_bh(&policy->lock);
 	policy->walk.dead = 1;
+	write_unlock_bh(&policy->lock);
 
 	atomic_inc(&policy->genid);
 
@@ -1431,12 +1433,7 @@ static void xfrm_policy_requeue(struct xfrm_policy *old,
 static bool xfrm_policy_mark_match(struct xfrm_policy *policy,
 				   struct xfrm_policy *pol)
 {
-	u32 mark = policy->mark.v & policy->mark.m;
-
-	if (policy->mark.v == pol->mark.v && policy->mark.m == pol->mark.m)
-		return true;
-
-	if ((mark & pol->mark.m) == pol->mark.v &&
+	if (policy->mark.v == pol->mark.v &&
 	    policy->priority == pol->priority)
 		return true;
 
@@ -2808,7 +2805,7 @@ static void xfrm_policy_queue_process(struct timer_list *t)
 			continue;
 		}
 
-		nf_reset(skb);
+		nf_reset_ct(skb);
 		skb_dst_drop(skb);
 		skb_dst_set(skb, dst);
 

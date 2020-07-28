@@ -14,7 +14,7 @@
 	fragment@1 {
 		target = <&pio>;
 		__overlay__ {
-			uart3_rts_cts: uart3_rts_cts {
+			uart3_rts_cts: uart3-rts-cts-pins {
 				pins = "PA15", "PA16";
 				function = "uart3";
 			};

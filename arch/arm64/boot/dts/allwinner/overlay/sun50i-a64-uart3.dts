@@ -14,7 +14,7 @@
 	fragment@1 {
 		target = <&pio>;
 		__overlay__ {
-			uart3_pins: uart3_pins {
+			uart3_pins: uart3-pins {
 				pins = "PD0", "PD1";
 				function = "uart3";
 			};

@@ -56,17 +56,6 @@
 		ethernet1 = &brcmf;
 	};
 
-        rfkill_bt {
-                compatible = "rfkill-gpio";
-                pinctrl-names = "default";
-                pinctrl-0 = <&bt_pwr_pin>;
-                reset-gpios = <&pio 0 10 GPIO_ACTIVE_HIGH>;
-                clocks = <&rtc 1>;
-                clock-names = "ext_clock";
-                rfkill-name = "sunxi-bt";
-                rfkill-type = "bluetooth";
-        };
-
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
@@ -107,43 +96,9 @@
 
 	wifi_pwrseq: wifi_pwrseq {
 		compatible = "mmc-pwrseq-simple";
-                clocks = <&rtc 1>;
-                clock-names = "ext_clock";
 		reset-gpios = <&pio 0 9 GPIO_ACTIVE_LOW>; /* PA9 */
 		post-power-on-delay-ms = <200>;
 	};
-	
-        reg_cam_avdd: cam-avdd {
-                compatible = "regulator-fixed";
-                regulator-name = "cam500b-avdd";
-                regulator-min-microvolt = <2800000>;
-                regulator-max-microvolt = <2800000>;
-                vin-supply = <&reg_vcc3v3>;
-        };
-
-        reg_cam_dovdd: cam-dovdd {
-                compatible = "regulator-fixed";
-                regulator-name = "cam500b-dovdd";
-                regulator-min-microvolt = <1800000>;
-                regulator-max-microvolt = <1800000>;
-                vin-supply = <&reg_vcc3v3>;
-        };
-
-        reg_cam_dvdd: cam-dvdd {
-                compatible = "regulator-fixed";
-                regulator-name = "cam500b-dvdd";
-                regulator-min-microvolt = <1500000>;
-                regulator-max-microvolt = <1500000>;
-                vin-supply = <&reg_vcc3v3>;
-        };
-};
-
-&codec {
-        allwinner,audio-routing =
-                "Line Out", "LINEOUT",
-                "MIC1", "Mic",
-                "Mic",  "MBIAS";
-        status = "okay";
 };
 
 &de {
@@ -154,21 +109,6 @@
 	status = "okay";
 };
 
-&ehci2 {
-        status = "okay";
-};
-
-&ehci3 {
-        status = "okay";
-};
-
-&ohci2 {
-        status = "okay";
-};
-
-&ohci3 {
-        status = "okay";
-};
 
 &hdmi {
 	status = "okay";
@@ -279,80 +219,4 @@
 	 */
 	status = "okay";
 	usb0_id_det-gpios = <&pio 6 12 GPIO_ACTIVE_HIGH>; /* PG12 */
-};
-
-&csi {
-    status = "okay";
-
-    port {
-        #address-cells = <1>;
-        #size-cells = <0>;
-
-        /* Parallel bus endpoint */
-        csi_from_ov5640: endpoint {
-            remote-endpoint = <&ov5640_to_csi>;
-            bus-width = <8>;
-            data-shift = <2>;
-            hsync-active = <1>; /* Active high */
-            vsync-active = <0>; /* Active low */
-            data-active = <1>;  /* Active high */
-            pclk-sample = <1>;  /* Rising */
-        };
-    };
-};
-
-&i2c2 {
-        status = "okay";
-
- ov5640: camera@3c {
-        compatible = "ovti,ov5640";
-        reg = <0x3c>;
-         pinctrl-names = "default";
-         pinctrl-0 = <&csi_mclk_pin>;
-         clocks = <&ccu CLK_CSI_MCLK>;
-         clock-names = "xclk";
-
-
-        reset-gpios = <&pio 4 14 GPIO_ACTIVE_LOW>;
-        /*powerdown-gpios = <&pio 0 17 GPIO_ACTIVE_HIGH>;*/
-        csien-gpios = <&pio 3 16 GPIO_ACTIVE_HIGH>;
-        poweren-gpios = <&pio 0 8 GPIO_ACTIVE_HIGH>;
-       powerdown-gpios = <&pio 4 15 GPIO_ACTIVE_HIGH>;
-        AVDD-supply = <&reg_cam_avdd>;
-        DOVDD-supply = <&reg_cam_dovdd>;
-        DVDD-supply = <&reg_cam_dvdd>;
-
-        port {
-            ov5640_to_csi: endpoint {
-                remote-endpoint = <&csi_from_ov5640>;
-                bus-width = <8>;
-                data-shift = <2>;
-                hsync-active = <1>; /* Active high */
-                vsync-active = <0>; /* Active low */
-                data-active = <1>;  /* Active high */
-                pclk-sample = <1>;  /* Rising */
-            };
-        };
-    };
-};
-
-&pio {
-    bt_pwr_pin: bt_pwr_pin@0 {
-        pins = "PA10";
-        function = "gpio_out";
-    };
-};
-
-&i2c2_pins {
-   bias-pull-up;
-};
-
-&spi1 {
-        status = "okay";
-
-        spidev0: spi@0 {
-                compatible = "spidev";
-                reg = <0>;
-                spi-max-frequency = <1000000>;
-        };
 };

@@ -47,36 +47,36 @@
 	model = "Xunlong Orange Pi PC Plus";
 	compatible = "xunlong,orangepi-pc-plus", "allwinner,sun8i-h3";
 
-        aliases {
-                /* ethernet0 is the H3 emac, defined in sun8i-h3.dtsi */
-                ethernet1 = &rtl8189ftv;
-        };
+	aliases {
+		/* ethernet0 is the H3 emac, defined in sun8i-h3.dtsi */
+		ethernet1 = &rtl8189ftv;
+	};
 
-        /delete-node/ reg_vcc_wifi;
+	wifi_pwrseq: wifi_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>; /* PL7 WIFI_EN */
+	};
+};
 
-        wifi_pwrseq: wifi_pwrseq {
-                compatible = "mmc-pwrseq-simple";
-                reset-gpios = <&r_pio 0 7 GPIO_ACTIVE_LOW>;
-                post-power-on-delay-ms = <50>;
-        };
-
-
+&emac {
+	/* LEDs changed to active high on the plus */
+	/delete-property/ allwinner,leds-active-low;
 };
 
 &mmc1 {
-        vmmc-supply = <&reg_vcc3v3>;
-        mmc-pwrseq = <&wifi_pwrseq>;
-        bus-width = <4>;
-        non-removable;
-        status = "okay";
+	vmmc-supply = <&reg_vcc3v3>;
+	mmc-pwrseq = <&wifi_pwrseq>;
+	bus-width = <4>;
+	non-removable;
+	status = "okay";
 
-        /*
-         * Explicitly define the sdio device, so that we can add an ethernet
-         * alias for it (which e.g. makes u-boot set a mac-address).
-         */
-        rtl8189ftv: sdio_wifi@1 {
-                reg = <1>;
-        };
+	/*
+	 * Explicitly define the sdio device, so that we can add an ethernet
+	 * alias for it (which e.g. makes u-boot set a mac-address).
+	 */
+	rtl8189ftv: sdio_wifi@1 {
+		reg = <1>;
+	};
 };
 
 &mmc2 {

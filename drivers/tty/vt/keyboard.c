@@ -48,6 +48,8 @@
 
 #include <asm/irq_regs.h>
 
+#include <linux/bootsplash.h>
+
 extern void ctrl_alt_del(void);
 
 /*
@@ -127,7 +129,11 @@ static DEFINE_SPINLOCK(func_buf_lock); /* guard 'func_buf'  and friends */
 static unsigned long key_down[BITS_TO_LONGS(KEY_CNT)];	/* keyboard key bitmap */
 static unsigned char shift_down[NR_SHIFT];		/* shift state counters.. */
 static bool dead_key_next;
-static int npadch = -1;					/* -1 or number assembled on pad */
+
+/* Handles a number being assembled on the number pad */
+static bool npadch_active;
+static unsigned int npadch_value;
+
 static unsigned int diacr;
 static char rep;					/* flag telling character repeat */
 
@@ -845,12 +851,12 @@ static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 		shift_state &= ~(1 << value);
 
 	/* kludge */
-	if (up_flag && shift_state != old_state && npadch != -1) {
+	if (up_flag && shift_state != old_state && npadch_active) {
 		if (kbd->kbdmode == VC_UNICODE)
-			to_utf8(vc, npadch);
+			to_utf8(vc, npadch_value);
 		else
-			put_queue(vc, npadch & 0xff);
-		npadch = -1;
+			put_queue(vc, npadch_value & 0xff);
+		npadch_active = false;
 	}
 }
 
@@ -868,7 +874,7 @@ static void k_meta(struct vc_data *vc, unsigned char value, char up_flag)
 
 static void k_ascii(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	int base;
+	unsigned int base;
 
 	if (up_flag)
 		return;
@@ -882,10 +888,12 @@ static void k_ascii(struct vc_data *vc, unsigned char value, char up_flag)
 		base = 16;
 	}
 
-	if (npadch == -1)
-		npadch = value;
-	else
-		npadch = npadch * base + value;
+	if (!npadch_active) {
+		npadch_value = 0;
+		npadch_active = true;
+	}
+
+	npadch_value = npadch_value * base + value;
 }
 
 static void k_lock(struct vc_data *vc, unsigned char value, char up_flag)
@@ -1385,6 +1393,28 @@ static void kbd_keycode(unsigned int keycode, int down, int hw_raw)
 	}
 #endif
 
+	/* Trap keys when bootsplash is shown */
+	if (bootsplash_would_render_now()) {
+		/* Deactivate bootsplash on ESC or Alt+Fxx VT switch */
+		if (keycode >= KEY_F1 && keycode <= KEY_F12) {
+			bootsplash_disable();
+
+			/*
+			 * No return here since we want to actually
+			 * perform the VT switch.
+			 */
+		} else {
+			if (keycode == KEY_ESC)
+				bootsplash_disable();
+
+			/*
+			 * Just drop any other keys.
+			 * Their effect would be hidden by the splash.
+			 */
+			return;
+		}
+	}
+
 	if (kbd->kbdmode == VC_MEDIUMRAW) {
 		/*
 		 * This is extended medium raw mode, with keys above 127
@@ -1491,7 +1521,7 @@ static void kbd_event(struct input_handle *handle, unsigned int event_type,
 
 	if (event_type == EV_MSC && event_code == MSC_RAW && HW_RAW(handle->dev))
 		kbd_rawcode(value);
-	if (event_type == EV_KEY)
+	if (event_type == EV_KEY && event_code <= KEY_MAX)
 		kbd_keycode(event_code, value, HW_RAW(handle->dev));
 
 	spin_unlock(&kbd_event_lock);

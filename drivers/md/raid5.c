@@ -2228,14 +2228,19 @@ static int grow_stripes(struct r5conf *conf, int num)
  * of the P and Q blocks.
  */
 static int scribble_alloc(struct raid5_percpu *percpu,
-			  int num, int cnt, gfp_t flags)
+			  int num, int cnt)
 {
 	size_t obj_size =
 		sizeof(struct page *) * (num+2) +
 		sizeof(addr_conv_t) * (num+2);
 	void *scribble;
 
-	scribble = kvmalloc_array(cnt, obj_size, flags);
+	/*
+	 * If here is in raid array suspend context, it is in memalloc noio
+	 * context as well, there is no potential recursive memory reclaim
+	 * I/Os with the GFP_KERNEL flag.
+	 */
+	scribble = kvmalloc_array(cnt, obj_size, GFP_KERNEL);
 	if (!scribble)
 		return -ENOMEM;
 
@@ -2267,8 +2272,7 @@ static int resize_chunks(struct r5conf *conf, int new_disks, int new_sectors)
 
 		percpu = per_cpu_ptr(conf->percpu, cpu);
 		err = scribble_alloc(percpu, new_disks,
-				     new_sectors / STRIPE_SECTORS,
-				     GFP_NOIO);
+				     new_sectors / STRIPE_SECTORS);
 		if (err)
 			break;
 	}
@@ -2550,10 +2554,16 @@ static void raid5_end_read_request(struct bio * bi)
 				(unsigned long long)s,
 				bdn);
 		} else if (atomic_read(&rdev->read_errors)
-			 > conf->max_nr_stripes)
-			pr_warn("md/raid:%s: Too many read errors, failing device %s.\n",
-			       mdname(conf->mddev), bdn);
-		else
+			 > conf->max_nr_stripes) {
+			if (!test_bit(Faulty, &rdev->flags)) {
+				pr_warn("md/raid:%s: %d read_errors > %d stripes\n",
+				    mdname(conf->mddev),
+				    atomic_read(&rdev->read_errors),
+				    conf->max_nr_stripes);
+				pr_warn("md/raid:%s: Too many read errors, failing device %s.\n",
+				    mdname(conf->mddev), bdn);
+			}
+		} else
 			retry = 1;
 		if (set_bad && test_bit(In_sync, &rdev->flags)
 		    && !test_bit(R5_ReadNoMerge, &sh->dev[i].flags))
@@ -4615,7 +4625,6 @@ static void break_stripe_batch_list(struct stripe_head *head_sh,
 					  (1 << STRIPE_FULL_WRITE) |
 					  (1 << STRIPE_BIOFILL_RUN) |
 					  (1 << STRIPE_COMPUTE_RUN)  |
-					  (1 << STRIPE_OPS_REQ_PENDING) |
 					  (1 << STRIPE_DISCARD) |
 					  (1 << STRIPE_BATCH_READY) |
 					  (1 << STRIPE_BATCH_ERR) |
@@ -5494,7 +5503,7 @@ static void make_discard_request(struct mddev *mddev, struct bio *bi)
 		return;
 
 	logical_sector = bi->bi_iter.bi_sector & ~((sector_t)STRIPE_SECTORS-1);
-	last_sector = bi->bi_iter.bi_sector + (bi->bi_iter.bi_size>>9);
+	last_sector = bio_end_sector(bi);
 
 	bi->bi_next = NULL;
 
@@ -5587,8 +5596,8 @@ static bool raid5_make_request(struct mddev *mddev, struct bio * bi)
 		if (ret == 0)
 			return true;
 		if (ret == -ENODEV) {
-			md_flush_request(mddev, bi);
-			return true;
+			if (md_flush_request(mddev, bi))
+				return true;
 		}
 		/* ret == -EAGAIN, fallback */
 		/*
@@ -5721,7 +5730,7 @@ static bool raid5_make_request(struct mddev *mddev, struct bio * bi)
 				do_flush = false;
 			}
 
-			if (!sh->batch_head)
+			if (!sh->batch_head || sh == sh->batch_head)
 				set_bit(STRIPE_HANDLE, &sh->state);
 			clear_bit(STRIPE_DELAYED, &sh->state);
 			if ((!sh->batch_head || sh == sh->batch_head) &&
@@ -6760,8 +6769,7 @@ static int alloc_scratch_buffer(struct r5conf *conf, struct raid5_percpu *percpu
 			       conf->previous_raid_disks),
 			   max(conf->chunk_sectors,
 			       conf->prev_chunk_sectors)
-			   / STRIPE_SECTORS,
-			   GFP_KERNEL)) {
+			   / STRIPE_SECTORS)) {
 		free_scratch_buffer(conf, percpu);
 		return -ENOMEM;
 	}

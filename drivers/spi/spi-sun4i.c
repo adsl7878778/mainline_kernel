@@ -389,6 +389,7 @@ static int sun4i_spi_runtime_resume(struct device *dev)
 	struct spi_master *master = dev_get_drvdata(dev);
 	struct sun4i_spi *sspi = spi_master_get_devdata(master);
 	int ret;
+	u32 reg;
 
 	ret = clk_prepare_enable(sspi->hclk);
 	if (ret) {
@@ -401,9 +402,10 @@ static int sun4i_spi_runtime_resume(struct device *dev)
 		dev_err(dev, "Couldn't enable module clock\n");
 		goto err;
 	}
+	reg = sun4i_spi_read(sspi, SUN4I_CTL_REG);
 
 	sun4i_spi_write(sspi, SUN4I_CTL_REG,
-			SUN4I_CTL_ENABLE | SUN4I_CTL_MASTER | SUN4I_CTL_TP);
+        reg | SUN4I_CTL_ENABLE | SUN4I_CTL_MASTER | SUN4I_CTL_TP);
 
 	return 0;
 
@@ -428,7 +430,6 @@ static int sun4i_spi_probe(struct platform_device *pdev)
 {
 	struct spi_master *master;
 	struct sun4i_spi *sspi;
-	struct resource	*res;
 	int ret = 0, irq;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct sun4i_spi));
@@ -440,8 +441,7 @@ static int sun4i_spi_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, master);
 	sspi = spi_master_get_devdata(master);
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	sspi->base_addr = devm_ioremap_resource(&pdev->dev, res);
+	sspi->base_addr = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(sspi->base_addr)) {
 		ret = PTR_ERR(sspi->base_addr);
 		goto err_free_master;
@@ -449,7 +449,6 @@ static int sun4i_spi_probe(struct platform_device *pdev)
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
-		dev_err(&pdev->dev, "No spi IRQ specified\n");
 		ret = -ENXIO;
 		goto err_free_master;
 	}

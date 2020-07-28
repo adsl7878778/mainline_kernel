@@ -345,6 +345,15 @@ xfs_buf_allocate_memory(
 	unsigned short		page_count, i;
 	xfs_off_t		start, end;
 	int			error;
+	xfs_km_flags_t		kmflag_mask = 0;
+
+	/*
+	 * assure zeroed buffer for non-read cases.
+	 */
+	if (!(flags & XBF_READ)) {
+		kmflag_mask |= KM_ZERO;
+		gfp_mask |= __GFP_ZERO;
+	}
 
 	/*
 	 * for buffers that are contained within a single page, just allocate
@@ -353,7 +362,9 @@ xfs_buf_allocate_memory(
 	 */
 	size = BBTOB(bp->b_length);
 	if (size < PAGE_SIZE) {
-		bp->b_addr = kmem_alloc(size, KM_NOFS);
+		int align_mask = xfs_buftarg_dma_alignment(bp->b_target);
+		bp->b_addr = kmem_alloc_io(size, align_mask,
+					   KM_NOFS | kmflag_mask);
 		if (!bp->b_addr) {
 			/* low memory - use alloc_page loop instead */
 			goto use_alloc_page;
@@ -368,7 +379,7 @@ xfs_buf_allocate_memory(
 		}
 		bp->b_offset = offset_in_page(bp->b_addr);
 		bp->b_pages = bp->b_page_array;
-		bp->b_pages[0] = virt_to_page(bp->b_addr);
+		bp->b_pages[0] = kmem_to_page(bp->b_addr);
 		bp->b_page_count = 1;
 		bp->b_flags |= _XBF_KMEM;
 		return 0;
@@ -1151,8 +1162,10 @@ xfs_buf_ioend(
 		bp->b_ops->verify_read(bp);
 	}
 
-	if (!bp->b_error)
+	if (!bp->b_error) {
+		bp->b_flags &= ~XBF_WRITE_FAIL;
 		bp->b_flags |= XBF_DONE;
+	}
 
 	if (bp->b_iodone)
 		(*(bp->b_iodone))(bp);
@@ -1212,7 +1225,7 @@ xfs_bwrite(
 
 	bp->b_flags |= XBF_WRITE;
 	bp->b_flags &= ~(XBF_ASYNC | XBF_READ | _XBF_DELWRI_Q |
-			 XBF_WRITE_FAIL | XBF_DONE);
+			 XBF_DONE);
 
 	error = xfs_buf_submit(bp);
 	if (error)
@@ -1741,7 +1754,7 @@ xfs_alloc_buftarg(
 {
 	xfs_buftarg_t		*btp;
 
-	btp = kmem_zalloc(sizeof(*btp), KM_SLEEP | KM_NOFS);
+	btp = kmem_zalloc(sizeof(*btp), KM_NOFS);
 
 	btp->bt_mount = mp;
 	btp->bt_dev =  bdev->bd_dev;
@@ -1918,7 +1931,7 @@ xfs_buf_delwri_submit_buffers(
 		 * synchronously. Otherwise, drop the buffer from the delwri
 		 * queue and submit async.
 		 */
-		bp->b_flags &= ~(_XBF_DELWRI_Q | XBF_WRITE_FAIL);
+		bp->b_flags &= ~_XBF_DELWRI_Q;
 		bp->b_flags |= XBF_WRITE;
 		if (wait_list) {
 			bp->b_flags &= ~XBF_ASYNC;
@@ -2096,7 +2109,7 @@ xfs_verify_magic(
 	int			idx;
 
 	idx = xfs_sb_version_hascrc(&mp->m_sb);
-	if (unlikely(WARN_ON(!bp->b_ops || !bp->b_ops->magic[idx])))
+	if (WARN_ON(!bp->b_ops || !bp->b_ops->magic[idx]))
 		return false;
 	return dmagic == bp->b_ops->magic[idx];
 }
@@ -2114,7 +2127,7 @@ xfs_verify_magic16(
 	int			idx;
 
 	idx = xfs_sb_version_hascrc(&mp->m_sb);
-	if (unlikely(WARN_ON(!bp->b_ops || !bp->b_ops->magic16[idx])))
+	if (WARN_ON(!bp->b_ops || !bp->b_ops->magic16[idx]))
 		return false;
 	return dmagic == bp->b_ops->magic16[idx];
 }

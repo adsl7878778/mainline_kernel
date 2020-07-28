@@ -88,7 +88,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&wifi_en_npi>;
 		reset-gpios = <&pio 6 13 GPIO_ACTIVE_LOW>;  // PG13 WL_RESTN
-		post-power-on-delay-ms = <50>;
+		post-power-on-delay-ms = <200>;
 	};
 };
 

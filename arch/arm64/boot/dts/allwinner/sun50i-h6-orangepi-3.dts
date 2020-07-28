@@ -59,6 +59,15 @@
 		regulator-always-on;
 	};
 
+	reg_gmac_2v5: gmac-2v5 {
+		compatible = "regulator-fixed";
+		regulator-name = "gmac-2v5";
+		regulator-min-microvolt = <2500000>;
+		regulator-max-microvolt = <2500000>;
+		enable-active-high;
+		gpio = <&pio 3 6 GPIO_ACTIVE_HIGH>; /* PD6 */
+	};
+
 	reg_vcc33_wifi: vcc33-wifi {
 		/* Always on 3.3V regulator for WiFi and BT */
 		compatible = "regulator-fixed";
@@ -79,16 +88,7 @@
 		vin-supply = <&reg_vcc33_wifi>;
 	};
 
-	reg_gmac_2v5: gmac-2v5 {
-		compatible = "regulator-fixed";
-		regulator-name = "gmac-2v5";
-		regulator-min-microvolt = <2500000>;
-		regulator-max-microvolt = <2500000>;
-		enable-active-high;
-		gpio = <&pio 3 6 GPIO_ACTIVE_HIGH>; /* PD6 */
-	};
-
-	wifi_pwrseq: wifi_pwrseq {
+	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		clocks = <&rtc 1>;
 		clock-names = "ext_clock";
@@ -117,6 +117,21 @@
 	status = "okay";
 };
 
+&gpu {
+	mali-supply = <&reg_dcdcc>;
+	status = "okay";
+};
+
+&hdmi {
+	status = "okay";
+};
+
+&hdmi_out {
+	hdmi_out_con: endpoint {
+		remote-endpoint = <&hdmi_con_in>;
+	};
+};
+
 &emac {
 	pinctrl-names = "default";
 	pinctrl-0 = <&ext_rgmii_pins>;
@@ -133,21 +148,6 @@
 	allwinner,rx-delay-ps = <1500>;
 	allwinner,tx-delay-ps = <700>;
 	status = "okay";
-};
-
-&gpu {
-	mali-supply = <&reg_dcdcc>;
-	status = "okay";
-};
-
-&hdmi {
-	status = "okay";
-};
-
-&hdmi_out {
-	hdmi_out_con: endpoint {
-		remote-endpoint = <&hdmi_con_in>;
-	};
 };
 
 &mdio {
@@ -169,8 +169,6 @@
 };
 
 &mmc1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&mmc1_pins>;
 	vmmc-supply = <&reg_vcc33_wifi>;
 	vqmmc-supply = <&reg_vcc_wifi_io>;
 	mmc-pwrseq = <&wifi_pwrseq>;
@@ -385,6 +383,5 @@
 };
 
 &usb3phy {
-        phy-supply = <&reg_vcc5v>;
-        status = "okay";
+	status = "okay";
 };

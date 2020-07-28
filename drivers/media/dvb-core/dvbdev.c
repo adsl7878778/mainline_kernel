@@ -478,7 +478,7 @@ int dvb_register_device(struct dvb_adapter *adap, struct dvb_device **pdvbdev,
 		return -ENOMEM;
 	}
 
-	dvbdevfops = kzalloc(sizeof(struct file_operations), GFP_KERNEL);
+	dvbdevfops = kmemdup(template->fops, sizeof(*dvbdevfops), GFP_KERNEL);
 
 	if (!dvbdevfops){
 		kfree (dvbdev);
@@ -494,7 +494,6 @@ int dvb_register_device(struct dvb_adapter *adap, struct dvb_device **pdvbdev,
 	dvbdev->fops = dvbdevfops;
 	init_waitqueue_head (&dvbdev->wait_queue);
 
-	memcpy(dvbdevfops, template->fops, sizeof(struct file_operations));
 	dvbdevfops->owner = adap->module;
 
 	list_add_tail (&dvbdev->list_head, &adap->device_list);
@@ -708,9 +707,10 @@ int dvb_create_media_graph(struct dvb_adapter *adap,
 	}
 
 	if (ntuner && ndemod) {
-		pad_source = media_get_pad_index(tuner, true,
+		/* NOTE: first found tuner source pad presumed correct */
+		pad_source = media_get_pad_index(tuner, false,
 						 PAD_SIGNAL_ANALOG);
-		if (pad_source)
+		if (pad_source < 0)
 			return -EINVAL;
 		ret = media_create_pad_links(mdev,
 					     MEDIA_ENT_F_TUNER,

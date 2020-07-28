@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2019 Junjiro R. Okajima
+ * Copyright (C) 2005-2020 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,19 +72,6 @@ static int h_permission(struct inode *h_inode, int mask,
 	if (!err)
 		err = security_inode_permission(h_inode, mask);
 
-#if 0
-	if (!err) {
-		/* todo: do we need to call ima_path_check()? */
-		struct path h_path = {
-			.dentry	=
-			.mnt	= h_mnt
-		};
-		err = ima_path_check(&h_path,
-				     mask & (MAY_READ | MAY_WRITE | MAY_EXEC),
-				     IMA_COUNT_LEAVE);
-	}
-#endif
-
 out:
 	return err;
 }
@@ -106,7 +93,13 @@ static int aufs_permission(struct inode *inode, int mask)
 	sb = inode->i_sb;
 	si_read_lock(sb, AuLock_FLUSH);
 	ii_read_lock_child(inode);
-#if 0
+#if 0 /* reserved for future use */
+	/*
+	 * This test may be rather 'too much' since the test is essentially done
+	 * in the aufs_lookup().  Theoretically it is possible that the inode
+	 * generation doesn't match to the superblock's here.  But it isn't a
+	 * big deal I suppose.
+	 */
 	err = au_iigen_test(inode, au_sigen(sb));
 	if (unlikely(err))
 		goto out;
@@ -224,7 +217,7 @@ static struct dentry *aufs_lookup(struct inode *dir, struct dentry *dentry,
 	if (inode)
 		atomic_inc(&inode->i_count);
 	ret = d_splice_alias(inode, dentry);
-#if 0
+#if 0 /* reserved for future use */
 	if (unlikely(d_need_lookup(dentry))) {
 		spin_lock(&dentry->d_lock);
 		dentry->d_flags &= ~DCACHE_NEED_LOOKUP;
@@ -1187,15 +1180,14 @@ static void au_refresh_iattr(struct inode *inode, struct kstat *st,
  * returns zero or negative (an error).
  * @dentry will be read-locked in success.
  */
-int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path,
-		      int locked)
+int au_h_path_getattr(struct dentry *dentry, struct inode *inode, int force,
+		      struct path *h_path, int locked)
 {
 	int err;
 	unsigned int mnt_flags, sigen;
 	unsigned char udba_none;
 	aufs_bindex_t bindex;
 	struct super_block *sb, *h_sb;
-	struct inode *inode;
 
 	h_path->mnt = NULL;
 	h_path->dentry = NULL;
@@ -1236,7 +1228,11 @@ int au_h_path_getattr(struct dentry *dentry, int force, struct path *h_path,
 		di_read_lock_child(dentry, AuLock_IR);
 
 body:
-	inode = d_inode(dentry);
+	if (!inode) {
+		inode = d_inode(dentry);
+		if (unlikely(!inode))
+			goto out;
+	}
 	bindex = au_ibtop(inode);
 	h_path->mnt = au_sbr_mnt(sb, bindex);
 	h_sb = h_path->mnt->mnt_sb;
@@ -1276,7 +1272,8 @@ static int aufs_getattr(const struct path *path, struct kstat *st,
 	err = si_read_lock(sb, AuLock_FLUSH | AuLock_NOPLM);
 	if (unlikely(err))
 		goto out;
-	err = au_h_path_getattr(dentry, /*force*/0, &h_path, /*locked*/0);
+	err = au_h_path_getattr(dentry, /*inode*/NULL, /*force*/0, &h_path,
+				/*locked*/0);
 	if (unlikely(err))
 		goto out_si;
 	if (unlikely(!h_path.dentry))

@@ -25,7 +25,9 @@ static __init void timer_of_irq_exit(struct of_timer_irq *of_irq)
 
 	struct clock_event_device *clkevt = &to->clkevt;
 
-	of_irq->percpu ? free_percpu_irq(of_irq->irq, clkevt) :
+	if (of_irq->percpu)
+		free_percpu_irq(of_irq->irq, clkevt);
+	else
 		free_irq(of_irq->irq, clkevt);
 }
 
@@ -190,7 +192,7 @@ int __init timer_of_init(struct device_node *np, struct timer_of *to)
 	}
 
 	if (!to->clkevt.name)
-		to->clkevt.name = np->name;
+		to->clkevt.name = np->full_name;
 
 	to->np = np;
 

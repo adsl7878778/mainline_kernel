@@ -5,22 +5,25 @@
  * Maxime Ripard <maxime.ripard@free-electrons.com>
  */
 
-#include <drm/drmP.h>
-#include <drm/drm_atomic_helper.h>
-#include <drm/drm_probe_helper.h>
-#include <drm/drm_edid.h>
-#include <drm/drm_encoder.h>
-#include <drm/drm_of.h>
-#include <drm/drm_panel.h>
-
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/iopoll.h>
+#include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
+
+#include <drm/drm_atomic_helper.h>
+#include <drm/drm_edid.h>
+#include <drm/drm_encoder.h>
+#include <drm/drm_of.h>
+#include <drm/drm_panel.h>
+#include <drm/drm_print.h>
+#include <drm/drm_probe_helper.h>
+
+#include <sound/soc.h>
 
 #include "sun4i_backend.h"
 #include "sun4i_crtc.h"
@@ -86,6 +89,10 @@ static void sun4i_hdmi_disable(struct drm_encoder *encoder)
 
 	DRM_DEBUG_DRIVER("Disabling the HDMI Output\n");
 
+#ifdef CONFIG_DRM_SUN4I_HDMI_AUDIO
+	sun4i_hdmi_audio_destroy(hdmi);
+#endif
+
 	val = readl(hdmi->base + SUN4I_HDMI_VID_CTRL_REG);
 	val &= ~SUN4I_HDMI_VID_CTRL_ENABLE;
 	writel(val, hdmi->base + SUN4I_HDMI_VID_CTRL_REG);
@@ -113,6 +120,11 @@ static void sun4i_hdmi_enable(struct drm_encoder *encoder)
 		val |= SUN4I_HDMI_VID_CTRL_HDMI_MODE;
 
 	writel(val, hdmi->base + SUN4I_HDMI_VID_CTRL_REG);
+
+#ifdef CONFIG_DRM_SUN4I_HDMI_AUDIO
+	if (hdmi->hdmi_audio && sun4i_hdmi_audio_create(hdmi))
+		DRM_ERROR("Couldn't create the HDMI audio adapter\n");
+#endif
 }
 
 static void sun4i_hdmi_mode_set(struct drm_encoder *encoder,
@@ -217,6 +229,9 @@ static int sun4i_hdmi_get_modes(struct drm_connector *connector)
 	if (!edid)
 		return 0;
 
+#ifdef CONFIG_DRM_SUN4I_HDMI_AUDIO
+	hdmi->hdmi_audio = drm_detect_monitor_audio(edid);
+#endif
 	hdmi->hdmi_monitor = drm_detect_hdmi_monitor(edid);
 	DRM_DEBUG_DRIVER("Monitor is %s monitor\n",
 			 hdmi->hdmi_monitor ? "an HDMI" : "a DVI");
@@ -261,9 +276,8 @@ sun4i_hdmi_connector_detect(struct drm_connector *connector, bool force)
 	struct sun4i_hdmi *hdmi = drm_connector_to_sun4i_hdmi(connector);
 	unsigned long reg;
 
-	if (readl_poll_timeout(hdmi->base + SUN4I_HDMI_HPD_REG, reg,
-			       reg & SUN4I_HDMI_HPD_HIGH,
-			       0, 500000)) {
+	reg = readl(hdmi->base + SUN4I_HDMI_HPD_REG);
+	if (reg & SUN4I_HDMI_HPD_HIGH) {
 		cec_phys_addr_invalidate(hdmi->cec_adap);
 		return connector_status_disconnected;
 	}
@@ -639,9 +653,10 @@ static int sun4i_hdmi_bind(struct device *dev, struct device *master,
 
 	drm_connector_helper_add(&hdmi->connector,
 				 &sun4i_hdmi_connector_helper_funcs);
-	ret = drm_connector_init(drm, &hdmi->connector,
-				 &sun4i_hdmi_connector_funcs,
-				 DRM_MODE_CONNECTOR_HDMIA);
+	ret = drm_connector_init_with_ddc(drm, &hdmi->connector,
+					  &sun4i_hdmi_connector_funcs,
+					  DRM_MODE_CONNECTOR_HDMIA,
+					  hdmi->ddc_i2c);
 	if (ret) {
 		dev_err(dev,
 			"Couldn't initialise the HDMI connector\n");
@@ -681,8 +696,6 @@ static void sun4i_hdmi_unbind(struct device *dev, struct device *master,
 	struct sun4i_hdmi *hdmi = dev_get_drvdata(dev);
 
 	cec_unregister_adapter(hdmi->cec_adap);
-	drm_connector_cleanup(&hdmi->connector);
-	drm_encoder_cleanup(&hdmi->encoder);
 	i2c_del_adapter(hdmi->i2c);
 	i2c_put_adapter(hdmi->ddc_i2c);
 	clk_disable_unprepare(hdmi->mod_clk);

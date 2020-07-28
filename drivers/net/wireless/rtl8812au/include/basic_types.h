@@ -72,6 +72,10 @@
 
 #ifdef PLATFORM_LINUX
 	#include <linux/version.h>
+	#ifndef RHEL_RELEASE_CODE
+	#define RHEL_RELEASE_VERSION(a,b) (((a) << 8) + (b))
+	#define RHEL_RELEASE_CODE 0
+	#endif
 	#include <linux/types.h>
 	#include <linux/module.h>
 	#include <linux/kernel.h>
@@ -95,9 +99,16 @@
 	#define UINT u32
 	#define ULONG u32
 
-	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19))
-		typedef _Bool bool;
-	#endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19))
+typedef _Bool bool;
+
+enum {
+	false	= 0,
+	true	= 1
+};
+#endif
+
+	typedef void (*proc_t)(void *);
 
 	typedef	__kernel_size_t	SIZE_T;
 	typedef	__kernel_ssize_t	SSIZE_T;

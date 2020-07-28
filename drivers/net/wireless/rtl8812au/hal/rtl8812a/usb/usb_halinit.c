@@ -23,6 +23,7 @@
 
 #endif
 
+
 static void _dbg_dump_macreg(_adapter *padapter)
 {
 	u32 offset = 0;
@@ -49,7 +50,7 @@ _ConfigChipOutEP_8812(
 
 	switch (NumOutPipe) {
 	case	4:
-		pHalData->OutEpQueueSel = TX_SELE_HQ | TX_SELE_LQ | TX_SELE_NQ;
+		pHalData->OutEpQueueSel = TX_SELE_HQ | TX_SELE_LQ | TX_SELE_NQ | TX_SELE_EQ;
 		pHalData->OutEpNumber = 4;
 		break;
 	case	3:
@@ -72,6 +73,44 @@ _ConfigChipOutEP_8812(
 
 }
 
+static VOID _FourOutPipeMapping88212AU(
+	IN	PADAPTER	pAdapter,
+	IN	BOOLEAN		bWIFICfg
+)
+{
+	struct dvobj_priv	*pdvobjpriv = adapter_to_dvobj(pAdapter);
+
+	if (bWIFICfg) { /* for WMM */
+
+		/* 0:H, 1:N, 2:L ,3:E */
+
+		pdvobjpriv->Queue2Pipe[0] = pdvobjpriv->RtOutPipe[0];/* VO */
+		pdvobjpriv->Queue2Pipe[1] = pdvobjpriv->RtOutPipe[1];/* VI */
+		pdvobjpriv->Queue2Pipe[2] = pdvobjpriv->RtOutPipe[2];/* BE */
+		pdvobjpriv->Queue2Pipe[3] = pdvobjpriv->RtOutPipe[1];/* BK */
+
+		pdvobjpriv->Queue2Pipe[4] = pdvobjpriv->RtOutPipe[0];/* BCN */
+		pdvobjpriv->Queue2Pipe[5] = pdvobjpriv->RtOutPipe[0];/* MGT */
+		pdvobjpriv->Queue2Pipe[6] = pdvobjpriv->RtOutPipe[3];/* HIGH */
+		pdvobjpriv->Queue2Pipe[7] = pdvobjpriv->RtOutPipe[0];/* TXCMD */
+
+	} else { /* typical setting */
+
+		/* 0:H, 1:N, 2:L, 3:E */
+
+		pdvobjpriv->Queue2Pipe[0] = pdvobjpriv->RtOutPipe[1];/* VO */
+		pdvobjpriv->Queue2Pipe[1] = pdvobjpriv->RtOutPipe[1];/* VI */
+		pdvobjpriv->Queue2Pipe[2] = pdvobjpriv->RtOutPipe[2];/* BE */
+		pdvobjpriv->Queue2Pipe[3] = pdvobjpriv->RtOutPipe[2];/* BK */
+
+		pdvobjpriv->Queue2Pipe[4] = pdvobjpriv->RtOutPipe[0];/* BCN */
+		pdvobjpriv->Queue2Pipe[5] = pdvobjpriv->RtOutPipe[3];/* MGT */
+		pdvobjpriv->Queue2Pipe[6] = pdvobjpriv->RtOutPipe[0];/* HIGH */
+		pdvobjpriv->Queue2Pipe[7] = pdvobjpriv->RtOutPipe[3];/* TXCMD */
+	}
+
+}
+
 static BOOLEAN HalUsbSetQueuePipeMapping8812AUsb(
 	IN	PADAPTER	pAdapter,
 	IN	u8		NumInPipe,
@@ -80,6 +119,8 @@ static BOOLEAN HalUsbSetQueuePipeMapping8812AUsb(
 {
 	HAL_DATA_TYPE	*pHalData	= GET_HAL_DATA(pAdapter);
 	BOOLEAN			result		= _FALSE;
+	struct registry_priv *pregistrypriv = &pAdapter->registrypriv;
+	BOOLEAN	 bWIFICfg = (pregistrypriv->wifi_spec) ? _TRUE : _FALSE;
 
 	_ConfigChipOutEP_8812(pAdapter, NumOutPipe);
 
@@ -94,6 +135,10 @@ static BOOLEAN HalUsbSetQueuePipeMapping8812AUsb(
 	/*	return result; */
 	/* } */
 
+	if (NumOutPipe == 4) {
+		result = _TRUE;
+		_FourOutPipeMapping88212AU(pAdapter, bWIFICfg);
+	} else
 	result = Hal_MappingOutPipe(pAdapter, NumOutPipe);
 
 	return result;
@@ -380,8 +425,10 @@ _InitQueueReservedPage_8821AUsb(
 	u32			numHQ		= 0;
 	u32			numLQ		= 0;
 	u32			numNQ		= 0;
+	u32			numEQ		= 0;
 	u32			numPubQ	= 0;
 	u32			value32;
+	u32			value32_npq;
 	u8			value8;
 	BOOLEAN			bWiFiConfig	= pregistrypriv->wifi_spec;
 #ifdef CONFIG_MCC_MODE
@@ -398,6 +445,8 @@ _InitQueueReservedPage_8821AUsb(
 			numLQ = WMM_NORMAL_PAGE_NUM_LPQ_8821;
 		if (pHalData->OutEpQueueSel & TX_SELE_NQ)
 			numNQ = WMM_NORMAL_PAGE_NUM_NPQ_8821;
+		if (pHalData->OutEpQueueSel & TX_SELE_EQ)
+		 	numEQ = NORMAL_PAGE_NUM_EPQ_8821;
 	} else if (en_mcc) {
 		/* mcc case */
 		if (pHalData->OutEpQueueSel & TX_SELE_HQ)
@@ -406,6 +455,8 @@ _InitQueueReservedPage_8821AUsb(
 			numLQ = MCC_NORMAL_PAGE_NUM_LPQ_8821;
 		if (pHalData->OutEpQueueSel & TX_SELE_NQ)
 			numNQ = MCC_NORMAL_PAGE_NUM_NPQ_8821;
+		if (pHalData->OutEpQueueSel & TX_SELE_EQ)
+		 	numEQ = NORMAL_PAGE_NUM_EPQ_8821;
 	} else {
 		/* narmal case */
 		if (pHalData->OutEpQueueSel & TX_SELE_HQ)
@@ -414,12 +465,14 @@ _InitQueueReservedPage_8821AUsb(
 			numLQ = NORMAL_PAGE_NUM_LPQ_8821;
 		if (pHalData->OutEpQueueSel & TX_SELE_NQ)
 			numNQ = NORMAL_PAGE_NUM_NPQ_8821;
+		if (pHalData->OutEpQueueSel & TX_SELE_EQ)
+			numEQ = NORMAL_PAGE_NUM_EPQ_8821;
+
 	}
 
-	numPubQ = TX_TOTAL_PAGE_NUMBER_8821 - numHQ - numLQ - numNQ;
-
-	value8 = (u8)_NPQ(numNQ);
-	rtw_write8(Adapter, REG_RQPN_NPQ, value8);
+	numPubQ = TX_TOTAL_PAGE_NUMBER_8821 - numHQ - numLQ - numNQ - numEQ;
+	value32_npq = _NPQ(numNQ) | _EPQ(numEQ);
+	rtw_write32(Adapter, REG_RQPN_NPQ, value32_npq);
 
 	/* TX DMA RQPN */
 	value32 = _HPQ(numHQ) | _LPQ(numLQ) | _PUBQ(numPubQ) | LD_RQPN;
@@ -650,6 +703,43 @@ _InitNormalChipThreeOutEpPriority_8812AUsb(
 }
 
 static VOID
+init_hi_queue_config_8812a_usb(
+	IN	PADAPTER Adapter
+)
+{
+	/* Packet in Hi Queue Tx immediately (No constraint for ATIM Period)*/
+	rtw_write8(Adapter, REG_HIQ_NO_LMT_EN, 0xFF);
+}
+
+static VOID
+_InitNormalChipFourOutEpPriority_8812AUsb(
+	IN	PADAPTER Adapter
+)
+{
+	struct registry_priv *pregistrypriv = &Adapter->registrypriv;
+	u16			beQ, bkQ, viQ, voQ, mgtQ, hiQ;
+
+	if (!pregistrypriv->wifi_spec) { /* typical setting */
+		beQ		= QUEUE_LOW;
+		bkQ		= QUEUE_LOW;
+		viQ		= QUEUE_NORMAL;
+		voQ		= QUEUE_NORMAL;
+		mgtQ	= QUEUE_EXTRA;
+		hiQ		= QUEUE_HIGH;
+	} else { /* for WMM */
+		beQ		= QUEUE_LOW;
+		bkQ		= QUEUE_NORMAL;
+		viQ		= QUEUE_NORMAL;
+		voQ		= QUEUE_HIGH;
+		mgtQ	= QUEUE_HIGH;
+		hiQ		= QUEUE_HIGH;
+	}
+	_InitNormalChipRegPriority_8812AUsb(Adapter, beQ, bkQ, viQ, voQ, mgtQ, hiQ);
+	init_hi_queue_config_8812a_usb(Adapter);
+}
+
+
+static VOID
 _InitQueuePriority_8812AUsb(
 	IN	PADAPTER Adapter
 )
@@ -661,8 +751,10 @@ _InitQueuePriority_8812AUsb(
 		_InitNormalChipTwoOutEpPriority_8812AUsb(Adapter);
 		break;
 	case 3:
-	case 4:
 		_InitNormalChipThreeOutEpPriority_8812AUsb(Adapter);
+		break;
+	case 4:
+		_InitNormalChipFourOutEpPriority_8812AUsb(Adapter);
 		break;
 	default:
 		RTW_INFO("_InitQueuePriority_8812AUsb(): Shall not reach here!\n");
@@ -799,8 +891,8 @@ _InitAdaptiveCtrl_8812AUsb(
 	rtw_write16(Adapter, REG_SPEC_SIFS, value16);
 
 	/* Retry Limit */
-	value16 = _LRL(RL_VAL_STA) | _SRL(RL_VAL_STA);
-	rtw_write16(Adapter, REG_RL, value16);
+	value16 = BIT_LRL(RL_VAL_STA) | BIT_SRL(RL_VAL_STA);
+	rtw_write16(Adapter, REG_RETRY_LIMIT, value16);
 
 }
 
@@ -848,7 +940,7 @@ _InitBeaconMaxError_8812A(
 #ifdef CONFIG_RTW_LED
 static void _InitHWLed(PADAPTER Adapter)
 {
-	struct led_priv *pledpriv = &(Adapter->ledpriv);
+	struct led_priv *pledpriv = adapter_to_led(Adapter);
 
 	if (pledpriv->LedStrategy != HW_LED)
 		return;
@@ -963,7 +1055,7 @@ usb_AggSettingRxUpdate_8812A(
 			/* Adjust DMA page and thresh. */
 			temp = pHalData->rxagg_dma_size | (pHalData->rxagg_dma_timeout << 8);
 			rtw_write16(Adapter, REG_RXDMA_AGG_PG_TH, temp);
-			rtw_write8(Adapter, REG_RXDMA_AGG_PG_TH + 3, BIT(7)); /* for dma agg , 0x280[31]1GBIT_RXDMA_AGG_OLD_MOD, set 1 */
+			rtw_write8(Adapter, REG_RXDMA_AGG_PG_TH + 3, BIT(7)); /* for dma agg , 0x280[31]GBIT_RXDMA_AGG_OLD_MOD, set 1 */
 		}
 		break;
 	case RX_AGG_USB:
@@ -2042,7 +2134,7 @@ hal_CustomizedBehavior_8812AU(
 {
 #ifdef CONFIG_RTW_SW_LED
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
-	struct led_priv	*pledpriv = &(Adapter->ledpriv);
+	struct led_priv	*pledpriv = adapter_to_led(Adapter);
 
 
 	/* Led mode */
@@ -2200,7 +2292,7 @@ ReadLEDSetting_8812AU(
 )
 {
 #ifdef CONFIG_RTW_LED
-	struct led_priv *pledpriv = &(Adapter->ledpriv);
+	struct led_priv *pledpriv = adapter_to_led(Adapter);
 
 #ifdef CONFIG_RTW_SW_LED
 	pledpriv->bRegUseLed = _TRUE;
@@ -2255,6 +2347,9 @@ InitAdapterVariablesByPROM_8812AU(
 
 	if (IS_HARDWARE_TYPE_8821U(Adapter))
 		Hal_EfuseParseKFreeData_8821A(Adapter, pHalData->efuse_eeprom_data, pHalData->bautoload_fail_flag);
+
+	/* set coex. ant info once efuse parsing is done */
+	rtw_btcoex_set_ant_info(Adapter);
 }
 
 static void Hal_ReadPROMContent_8812A(

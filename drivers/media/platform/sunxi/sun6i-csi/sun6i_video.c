@@ -449,7 +449,12 @@ static int vidioc_g_parm(struct file *file, void *priv,
 static int vidioc_s_parm(struct file *file, void *priv,
 			 struct v4l2_streamparm *p)
 {
-	return 0;
+	struct sun6i_video *video = video_drvdata(file);
+	struct v4l2_subdev *subdev;
+
+	subdev = sun6i_video_remote_subdev(video, NULL);
+
+	return v4l2_s_parm_cap(video_devdata(file), subdev, p);
 }
 
 static const struct v4l2_ioctl_ops sun6i_video_ioctl_ops = {

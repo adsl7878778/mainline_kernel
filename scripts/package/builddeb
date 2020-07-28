@@ -42,24 +42,40 @@ create_package() {
 	chmod -R a+rX "$pdir"
 
 	# Create preinstall and post install script to remove dtb
-	if [[ "$1" == *dtb* ]]; then
-		echo "if [ -d /boot/dtb-$version ]; then mv /boot/dtb-$version /boot/dtb-$version.old; fi" >> $pdir/DEBIAN/preinst
-		echo "if [ -d /boot/dtb.old ]; then rm -rf /boot/dtb.old; fi" >> $pdir/DEBIAN/preinst
-		echo "if [ -d /boot/dtb ]; then mv /boot/dtb /boot/dtb.old; fi" >> $pdir/DEBIAN/preinst
-		echo "exit 0" >> $pdir/DEBIAN/preinst
-		chmod 775 $pdir/DEBIAN/preinst
+	if [ "$3" = "dtb" ]; then
 
-		echo "if [ -d /boot/dtb-$version.old ]; then rm -rf /boot/dtb-$version.old; fi" >> $pdir/DEBIAN/postinst
-		echo "ln -sf dtb-$version /boot/dtb > /dev/null 2>&1 || mv /boot/dtb-$version /boot/dtb" >> $pdir/DEBIAN/postinst
-		echo "exit 0" >> $pdir/DEBIAN/postinst
-		chmod 775 $pdir/DEBIAN/postinst
+	cat >> $pdir/DEBIAN/preinst <<EOT
+rm -rf /boot/dtb-$version; rm -rf /boot/dtb
+exit 0
+EOT
+
+	cat >> $pdir/DEBIAN/postinst <<EOT
+cd /boot
+ln -sfT dtb-$version dtb 2> /dev/null || mv dtb-$version dtb
+exit 0
+EOT
+
+	chmod 775 $pdir/DEBIAN/preinst ; chmod 775 $pdir/DEBIAN/postinst
 	fi
 
-	# Create postinstall script for headers
-	if [[ "$1" == *headers* ]]; then
-		echo "cd /usr/src/linux-headers-$version; echo \"Compiling headers - please wait ...\"; find -type f -exec touch {} +;make -s scripts >/dev/null 2>&1; make -s M=scripts/mod/ >/dev/null 2>&1" >> $pdir/DEBIAN/postinst
-		echo "exit 0" >> $pdir/DEBIAN/postinst
-		chmod 775 $pdir/DEBIAN/postinst
+	# Create postinst prerm scripts for headers
+	if [ "$3" = "headers" ]; then
+
+cat >> $pdir/DEBIAN/postinst << EOT
+cd /usr/src/linux-headers-$version
+echo "Compiling headers - please wait ..."
+find -type f -exec touch {} +
+make -s scripts >/dev/null
+make -s M=scripts/mod/ >/dev/null
+exit 0
+EOT
+
+cat >> $pdir/DEBIAN/prerm << EOT
+cd /usr/src/linux-headers-$version
+rm -rf scripts .config.old
+EOT
+
+	chmod 775 $pdir/DEBIAN/postinst ; chmod 775 $pdir/DEBIAN/prerm
 	fi
 
 	# Create the package
@@ -73,10 +89,10 @@ kernel_headers_dir="$objtree/debian/hdrtmp"
 libc_headers_dir="$objtree/debian/headertmp"
 dbg_dir="$objtree/debian/dbgtmp"
 dtb_dir="$objtree/debian/dtbtmp"
-packagename=linux-image-dev"$LOCALVERSION"
-kernel_headers_packagename=linux-headers-dev"$LOCALVERSION"
-dtb_packagename=linux-dtb-dev"$LOCALVERSION"
-libc_headers_packagename=linux-libc-dev-dev"$LOCALVERSION"
+packagename=linux-image-"$BRANCH$LOCALVERSION"
+kernel_headers_packagename=linux-headers-"$BRANCH$LOCALVERSION"
+dtb_packagename=linux-dtb-"$BRANCH$LOCALVERSION"
+libc_headers_packagename=linux-libc-dev-"$BRANCH$LOCALVERSION"
 dbg_packagename=$packagename-dbg
 
 if [ "$ARCH" = "um" ] ; then
@@ -206,7 +222,6 @@ done
 ##
 ## Create sym link to kernel image
 ##
-sed -e "s/set -e//g" -i $tmpdir/DEBIAN/postinst
 sed -e "s/exit 0//g" -i $tmpdir/DEBIAN/postinst
 cat >> $tmpdir/DEBIAN/postinst <<EOT
 if [ "\$(grep nand /proc/partitions)" != "" ] && [ "\$(grep mmc /proc/partitions)" = "" ]; then
@@ -226,7 +241,6 @@ EOT
 ##
 ## FAT install workaround
 ##
-sed -e "s/set -e//g" -i $tmpdir/DEBIAN/preinst
 sed -e "s/exit 0//g" -i $tmpdir/DEBIAN/preinst
 cat >> $tmpdir/DEBIAN/preinst <<EOT
 # exit if we are running chroot
@@ -245,7 +259,7 @@ check_and_unmount (){
 
 	bootfstype=\$(blkid -s TYPE -o value \$boot_partition)
 	if [ "\$bootfstype" = "vfat" ]; then
-		umount /boot
+		# we have to keep it mounted! umount /boot
 		rm -f /boot/System.map* /boot/config* /boot/vmlinuz* /boot/$image_name /boot/uImage
 	fi
 }
@@ -280,9 +294,9 @@ rm -f "$objtree/debian/hdrsrcfiles" "$objtree/debian/hdrobjfiles"
 (cd $destdir; make M=scripts clean)
 
 if [ "$ARCH" != "um" ]; then
-	create_package "$kernel_headers_packagename" "$kernel_headers_dir"
-	# create_package "$libc_headers_packagename" "$libc_headers_dir"
-	create_package "$dtb_packagename" "$dtb_dir"
+	create_package "$kernel_headers_packagename" "$kernel_headers_dir" "headers"
+#UNCOMENT	create_package "$libc_headers_packagename" "$libc_headers_dir"
+	create_package "$dtb_packagename" "$dtb_dir" "dtb"
 fi
 
 create_package "$packagename" "$tmpdir"

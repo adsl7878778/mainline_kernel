@@ -25,7 +25,7 @@
 		target = <&i2c4>;
 		__overlay__ {
 			pinctrl-names = "default";
-			pinctrl-0 = <&i2c4_pins_a>;
+			pinctrl-0 = <&i2c4_pins>;
 			status = "okay";
 		};
 	};

@@ -55,6 +55,15 @@ config REGULATOR_USERSPACE_CONSUMER
 
 	  If unsure, say no.
 
+config REGULATOR_USERSPACE_CONSUMER_OF
+	tristate "Userspace regulator consumer support (OF)"
+	help
+	  There are some classes of devices that are controlled entirely
+	  from user space. Userspace consumer driver provides ability to
+	  control power supplies for such devices.
+
+	  If unsure, say no.
+
 config REGULATOR_88PG86X
 	tristate "Marvell 88PG86X voltage regulators"
 	depends on I2C
@@ -83,6 +92,7 @@ config REGULATOR_88PM8607
 config REGULATOR_ACT8865
 	tristate "Active-semi act8865 voltage regulator"
 	depends on I2C
+	depends on POWER_SUPPLY
 	select REGMAP_I2C
 	help
 	  This driver controls a active-semi act8865 voltage output
@@ -618,6 +628,15 @@ config REGULATOR_MT6323
 	  This driver supports the control of different power rails of device
 	  through regulator interface.
 
+config REGULATOR_MT6358
+	tristate "MediaTek MT6358 PMIC"
+	depends on MFD_MT6397 && BROKEN
+	help
+	  Say y here to select this option to enable the power regulator of
+	  MediaTek MT6358 PMIC.
+	  This driver supports the control of different power rails of device
+	  through regulator interface.
+
 config REGULATOR_MT6380
 	tristate "MediaTek MT6380 PMIC"
 	depends on MTK_PMIC_WRAP
@@ -906,6 +925,13 @@ config REGULATOR_SY8106A
 	help
 	  This driver supports SY8106A single output regulator.
 
+config REGULATOR_SY8824X
+	tristate "Silergy SY8824C/SY8824E regulator"
+	depends on I2C && (OF || COMPILE_TEST)
+	select REGMAP_I2C
+	help
+	  This driver supports SY8824C single output regulator.
+
 config REGULATOR_TPS51632
 	tristate "TI TPS51632 Power Regulator"
 	depends on I2C
@@ -1087,6 +1113,14 @@ config REGULATOR_WM8994
 	help
 	  This driver provides support for the voltage regulators on the
 	  WM8994 CODEC.
+
+config REGULATOR_TP65185X
+	tristate "eInk display regulator tp65185x"
+	depends on I2C
+	select REGMAP_I2C
+	help
+	  This driver provides support for the voltage regulators for
+	  eInk displays on various e-book readers.
 
 endif
 

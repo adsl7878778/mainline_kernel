@@ -299,7 +299,7 @@ static void __init sun6i_rtc_clk_init(struct device_node *node,
 
 	of_property_read_string_index(node, "clock-output-names", 1,
 				      &clkout_name);
-	rtc->ext_losc = clk_register_gate(NULL, clkout_name, rtc->hw.init->name,
+	rtc->ext_losc = clk_register_gate(NULL, clkout_name, init.name,
 					  0, rtc->base + SUN6I_LOSC_OUT_GATING,
 					  SUN6I_LOSC_OUT_GATING_EN_OFFSET, 0,
 					  &rtc->lock);
@@ -381,6 +381,22 @@ static void __init sun50i_h6_rtc_clk_init(struct device_node *node)
 }
 CLK_OF_DECLARE_DRIVER(sun50i_h6_rtc_clk, "allwinner,sun50i-h6-rtc",
 		      sun50i_h6_rtc_clk_init);
+
+/*
+ * The R40 user manual is self-conflicting on whether the prescaler is
+ * fixed or configurable. The clock diagram shows it as fixed, but there
+ * is also a configurable divider in the RTC block.
+ */
+static const struct sun6i_rtc_clk_data sun8i_r40_rtc_data = {
+	.rc_osc_rate = 16000000,
+	.fixed_prescaler = 512,
+};
+static void __init sun8i_r40_rtc_clk_init(struct device_node *node)
+{
+	sun6i_rtc_clk_init(node, &sun8i_r40_rtc_data);
+}
+CLK_OF_DECLARE_DRIVER(sun8i_r40_rtc_clk, "allwinner,sun8i-r40-rtc",
+		      sun8i_r40_rtc_clk_init);
 
 static const struct sun6i_rtc_clk_data sun8i_v3_rtc_data = {
 	.rc_osc_rate = 32000,
@@ -635,6 +651,33 @@ static const struct rtc_class_ops sun6i_rtc_ops = {
 	.alarm_irq_enable	= sun6i_rtc_alarm_irq_enable
 };
 
+#ifdef CONFIG_PM_SLEEP
+/* Enable IRQ wake on suspend, to wake up from RTC. */
+static int sun6i_rtc_suspend(struct device *dev)
+{
+	struct sun6i_rtc_dev *chip = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev))
+		enable_irq_wake(chip->irq);
+
+	return 0;
+}
+
+/* Disable IRQ wake on resume. */
+static int sun6i_rtc_resume(struct device *dev)
+{
+	struct sun6i_rtc_dev *chip = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev))
+		disable_irq_wake(chip->irq);
+
+	return 0;
+}
+#endif
+
+static SIMPLE_DEV_PM_OPS(sun6i_rtc_pm_ops,
+	sun6i_rtc_suspend, sun6i_rtc_resume);
+
 static int sun6i_rtc_probe(struct platform_device *pdev)
 {
 	struct sun6i_rtc_dev *chip = sun6i_rtc;
@@ -647,10 +690,8 @@ static int sun6i_rtc_probe(struct platform_device *pdev)
 	chip->dev = &pdev->dev;
 
 	chip->irq = platform_get_irq(pdev, 0);
-	if (chip->irq < 0) {
-		dev_err(&pdev->dev, "No IRQ resource\n");
+	if (chip->irq < 0)
 		return chip->irq;
-	}
 
 	ret = devm_request_irq(&pdev->dev, chip->irq, sun6i_rtc_alarmirq,
 			       0, dev_name(&pdev->dev), chip);
@@ -694,6 +735,8 @@ static int sun6i_rtc_probe(struct platform_device *pdev)
 
 	clk_prepare_enable(chip->losc);
 
+	device_init_wakeup(&pdev->dev, 1);
+
 	chip->rtc = devm_rtc_device_register(&pdev->dev, "rtc-sun6i",
 					     &sun6i_rtc_ops, THIS_MODULE);
 	if (IS_ERR(chip->rtc)) {
@@ -729,6 +772,7 @@ static struct platform_driver sun6i_rtc_driver = {
 	.driver		= {
 		.name		= "sun6i-rtc",
 		.of_match_table = sun6i_rtc_dt_ids,
+		.pm = &sun6i_rtc_pm_ops,
 	},
 };
 builtin_platform_driver(sun6i_rtc_driver);

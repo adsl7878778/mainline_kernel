@@ -28,7 +28,6 @@
 #include <linux/input/mt.h>
 #include <linux/input/touchscreen.h>
 #include <asm/unaligned.h>
-#include <linux/of_device.h>
 #include <linux/regulator/consumer.h>
 
 #define WORK_REGISTER_THRESHOLD		0x00
@@ -767,8 +766,6 @@ edt_ft5x06_ts_prepare_debugfs(struct edt_ft5x06_ts_data *tsdata,
 			      const char *debugfs_name)
 {
 	tsdata->debug_dir = debugfs_create_dir(debugfs_name, NULL);
-	if (!tsdata->debug_dir)
-		return;
 
 	debugfs_create_u16("num_x", S_IRUSR, tsdata->debug_dir, &tsdata->num_x);
 	debugfs_create_u16("num_y", S_IRUSR, tsdata->debug_dir, &tsdata->num_y);
@@ -940,19 +937,25 @@ static void edt_ft5x06_ts_get_defaults(struct device *dev,
 
 	error = device_property_read_u32(dev, "offset", &val);
 	if (!error) {
-		edt_ft5x06_register_write(tsdata, reg_addr->reg_offset, val);
+		if (reg_addr->reg_offset != NO_REGISTER)
+			edt_ft5x06_register_write(tsdata,
+						  reg_addr->reg_offset, val);
 		tsdata->offset = val;
 	}
 
 	error = device_property_read_u32(dev, "offset-x", &val);
 	if (!error) {
-		edt_ft5x06_register_write(tsdata, reg_addr->reg_offset_x, val);
+		if (reg_addr->reg_offset_x != NO_REGISTER)
+			edt_ft5x06_register_write(tsdata,
+						  reg_addr->reg_offset_x, val);
 		tsdata->offset_x = val;
 	}
 
 	error = device_property_read_u32(dev, "offset-y", &val);
 	if (!error) {
-		edt_ft5x06_register_write(tsdata, reg_addr->reg_offset_y, val);
+		if (reg_addr->reg_offset_y != NO_REGISTER)
+			edt_ft5x06_register_write(tsdata,
+						  reg_addr->reg_offset_y, val);
 		tsdata->offset_y = val;
 	}
 }
@@ -1053,6 +1056,7 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 {
 	const struct edt_i2c_chip_data *chip_data;
 	struct edt_ft5x06_ts_data *tsdata;
+	u8 buf[2] = { 0xfc, 0x00 };
 	struct input_dev *input;
 	unsigned long irq_flags;
 	int error;
@@ -1080,15 +1084,14 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	if (IS_ERR(tsdata->vcc)) {
 		error = PTR_ERR(tsdata->vcc);
 		if (error != -EPROBE_DEFER)
-			dev_err(&client->dev, "failed to request regulator: %d\n",
-				error);
+			dev_err(&client->dev,
+				"failed to request regulator: %d\n", error);
 		return error;
 	}
 
 	error = regulator_enable(tsdata->vcc);
 	if (error < 0) {
-		dev_err(&client->dev, "failed to enable vcc: %d\n",
-			error);
+		dev_err(&client->dev, "failed to enable vcc: %d\n", error);
 		return error;
 	}
 
@@ -1143,6 +1146,12 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 		dev_err(&client->dev, "touchscreen probe failed\n");
 		return error;
 	}
+
+	/*
+	 * Dummy read access. EP0700MLP1 returns bogus data on the first
+	 * register read access and ignores writes.
+	 */
+	edt_ft5x06_ts_readwrite(tsdata->client, 2, buf, 2, buf);
 
 	edt_ft5x06_ts_set_regs(tsdata);
 	edt_ft5x06_ts_get_defaults(&client->dev, tsdata);
@@ -1227,18 +1236,9 @@ static int edt_ft5x06_ts_remove(struct i2c_client *client)
 static int __maybe_unused edt_ft5x06_ts_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
-	struct edt_ft5x06_ts_data *tsdata = i2c_get_clientdata(client);
 
 	if (device_may_wakeup(dev))
 		enable_irq_wake(client->irq);
-	else
-		regulator_disable(tsdata->vcc);
-
-	if (tsdata->wake_gpio)
-		gpiod_set_value(tsdata->wake_gpio, 0);
-
-	if (tsdata->reset_gpio)
-		gpiod_set_value(tsdata->reset_gpio, 1);
 
 	return 0;
 }
@@ -1246,24 +1246,9 @@ static int __maybe_unused edt_ft5x06_ts_suspend(struct device *dev)
 static int __maybe_unused edt_ft5x06_ts_resume(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
-	struct edt_ft5x06_ts_data *tsdata = i2c_get_clientdata(client);
-	int ret;
 
 	if (device_may_wakeup(dev))
 		disable_irq_wake(client->irq);
-	else {
-		ret = regulator_enable(tsdata->vcc);
-		if (ret < 0) {
-			dev_err(dev, "failed to enable vcc: %d\n", ret);
-			return ret;
-		}
-	}
-
-	if (tsdata->wake_gpio)
-		gpiod_set_value(tsdata->wake_gpio, 1);
-
-	if (tsdata->reset_gpio)
-		gpiod_set_value(tsdata->reset_gpio, 0);
 
 	return 0;
 }

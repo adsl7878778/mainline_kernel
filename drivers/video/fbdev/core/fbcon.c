@@ -81,6 +81,7 @@
 #include <asm/irq.h>
 
 #include "fbcon.h"
+#include <linux/bootsplash.h>
 
 #ifdef FBCONDEBUG
 #  define DPRINTK(fmt, args...) printk(KERN_DEBUG "%s: " fmt, __func__ , ## args)
@@ -578,6 +579,8 @@ static int do_fbcon_takeover(int show_logo)
 	for (i = first_fb_vc; i <= last_fb_vc; i++)
 		con2fb_map[i] = info_idx;
 
+	bootsplash_init();
+
 	err = do_take_over_console(&fb_con, first_fb_vc, last_fb_vc,
 				fbcon_is_default);
 
@@ -701,6 +704,9 @@ static void set_blitting_type(struct vc_data *vc, struct fb_info *info)
 	else {
 		fbcon_set_rotation(info);
 		fbcon_set_bitops(ops);
+
+		if (bootsplash_would_render_now())
+			fbcon_set_dummyops(ops);
 	}
 }
 
@@ -723,6 +729,19 @@ static void set_blitting_type(struct vc_data *vc, struct fb_info *info)
 	ops->p = &fb_display[vc->vc_num];
 	fbcon_set_rotation(info);
 	fbcon_set_bitops(ops);
+
+	/*
+	 * Note:
+	 * This is *eventually correct*.
+	 * Setting the fbcon operations and drawing the splash happen at
+	 * different points in time. If the splash is enabled/disabled
+	 * in between, then bootsplash_{en,dis}able will schedule a
+	 * redraw, which will again render the splash (or not) and set
+	 * the correct fbcon ops.
+	 * The last run will then be the right one.
+	 */
+	if (bootsplash_would_render_now())
+		fbcon_set_dummyops(ops);
 }
 
 static int fbcon_invalid_charcount(struct fb_info *info, unsigned charcount)
@@ -1276,6 +1295,9 @@ finished:
 	if (!con_is_bound(&fb_con))
 		fbcon_exit();
 
+	if (vc->vc_num == logo_shown)
+		logo_shown = FBCON_LOGO_CANSHOW;
+
 	return;
 }
 
@@ -1378,6 +1400,16 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 	struct fbcon_ops *ops = info->fbcon_par;
 	int y;
  	int c = scr_readw((u16 *) vc->vc_pos);
+
+	/*
+	 * Disable the splash here so we don't have to hook into
+	 * vt_console_print() in drivers/tty/vt/vt.c
+	 *
+	 * We'd disable the splash just before the call to
+	 * hide_cursor() anyway, so this spot is just fine.
+	 */
+	if (oops_in_progress)
+		bootsplash_disable();
 
 	ops->cur_blink_jiffies = msecs_to_jiffies(vc->vc_cur_blink_ms);
 
@@ -2238,6 +2270,9 @@ static int fbcon_switch(struct vc_data *vc)
 
 	info = registered_fb[con2fb_map[vc->vc_num]];
 	ops = info->fbcon_par;
+
+	if (bootsplash_would_render_now())
+		bootsplash_render_full(info);
 
 	if (softback_top) {
 		if (softback_lines)

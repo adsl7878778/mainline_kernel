@@ -24,6 +24,8 @@
 #define AXP20X_PWR_STATUS_ACIN_PRESENT	BIT(7)
 #define AXP20X_PWR_STATUS_ACIN_AVAIL	BIT(6)
 
+#define AXP813_ACIN_PATH_SEL		BIT(7)
+
 #define AXP813_VHOLD_MASK		GENMASK(5, 3)
 #define AXP813_VHOLD_UV_TO_BIT(x)	((((x) / 100000) - 40) << 3)
 #define AXP813_VHOLD_REG_TO_UV(x)	\
@@ -44,6 +46,7 @@ struct axp20x_ac_power {
 	struct iio_channel *acin_v;
 	struct iio_channel *acin_i;
 	unsigned int irqs[ACIN_IRQS];
+	bool has_acin_path_sel;
 };
 
 static irqreturn_t axp20x_ac_power_irq(int irq, void *devid)

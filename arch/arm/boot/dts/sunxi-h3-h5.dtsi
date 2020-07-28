@@ -77,6 +77,23 @@
 		};
 	};
 
+	sound_hdmi: sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,name = "allwinner-hdmi";
+		simple-audio-card,mclk-fs = <256>;
+
+		simple-audio-card,codec {
+			sound-dai = <&hdmi>;
+		};
+
+		simple-audio-card,cpu {
+			sound-dai = <&i2s2>;
+			dai-tdm-slot-num = <2>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+
 	clocks {
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -172,11 +189,11 @@
 
 		display_clocks: clock@1000000 {
 			/* compatible is in per SoC .dtsi file */
-			reg = <0x01000000 0x100000>;
-			clocks = <&ccu CLK_DE>,
-				 <&ccu CLK_BUS_DE>;
-			clock-names = "mod",
-				      "bus";
+			reg = <0x01000000 0x10000>;
+			clocks = <&ccu CLK_BUS_DE>,
+				 <&ccu CLK_DE>;
+			clock-names = "bus",
+				      "mod";
 			resets = <&ccu RST_BUS_DE>;
 			#clock-cells = <1>;
 			#reset-cells = <1>;
@@ -364,6 +381,7 @@
 			clocks = <&ccu CLK_BUS_EHCI1>, <&ccu CLK_BUS_OHCI1>;
 			resets = <&ccu RST_BUS_EHCI1>, <&ccu RST_BUS_OHCI1>;
 			phys = <&usbphy 1>;
+			phy-names = "usb";
 			status = "disabled";
 		};
 
@@ -375,6 +393,7 @@
 				 <&ccu CLK_USB_OHCI1>;
 			resets = <&ccu RST_BUS_EHCI1>, <&ccu RST_BUS_OHCI1>;
 			phys = <&usbphy 1>;
+			phy-names = "usb";
 			status = "disabled";
 		};
 
@@ -385,6 +404,7 @@
 			clocks = <&ccu CLK_BUS_EHCI2>, <&ccu CLK_BUS_OHCI2>;
 			resets = <&ccu RST_BUS_EHCI2>, <&ccu RST_BUS_OHCI2>;
 			phys = <&usbphy 2>;
+			phy-names = "usb";
 			status = "disabled";
 		};
 
@@ -396,6 +416,7 @@
 				 <&ccu CLK_USB_OHCI2>;
 			resets = <&ccu RST_BUS_EHCI2>, <&ccu RST_BUS_OHCI2>;
 			phys = <&usbphy 2>;
+			phy-names = "usb";
 			status = "disabled";
 		};
 
@@ -406,6 +427,7 @@
 			clocks = <&ccu CLK_BUS_EHCI3>, <&ccu CLK_BUS_OHCI3>;
 			resets = <&ccu RST_BUS_EHCI3>, <&ccu RST_BUS_OHCI3>;
 			phys = <&usbphy 3>;
+			phy-names = "usb";
 			status = "disabled";
 		};
 
@@ -417,6 +439,7 @@
 				 <&ccu CLK_USB_OHCI3>;
 			resets = <&ccu RST_BUS_EHCI3>, <&ccu RST_BUS_OHCI3>;
 			phys = <&usbphy 3>;
+			phy-names = "usb";
 			status = "disabled";
 		};
 
@@ -556,15 +579,10 @@
 				pins = "PA15", "PA16";
 				function = "uart3";
 			};
-
-			csi_mclk_pin: csi-mclk-pin {
-				pins = "PE1";
-				function = "csi";
-			};
 		};
 
 		timer@1c20c00 {
-			compatible = "allwinner,sun4i-a10-timer";
+			compatible = "allwinner,sun8i-a23-timer";
 			reg = <0x01c20c00 0xa0>;
 			interrupts = <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
@@ -654,6 +672,7 @@
 			compatible = "allwinner,sun6i-a31-wdt";
 			reg = <0x01c20ca0 0x20>;
 			interrupts = <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&osc24M>;
 		};
 
 		spdif: spdif@1c21000 {
@@ -713,23 +732,7 @@
 			dmas = <&dma 27>;
 			resets = <&ccu RST_BUS_I2S2>;
 			dma-names = "tx";
-			//status = "disabled";
-		};
-
-		sound_hdmi: sound {
-			compatible = "simple-audio-card";
-			simple-audio-card,format = "i2s";
-			simple-audio-card,name = "allwinner,hdmi";
-			simple-audio-card,mclk-fs = <256>;
-			//status = "disabled";
-
-			simple-audio-card,codec {
-				sound-dai = <&hdmi>;
-			};
-
-			simple-audio-card,cpu {
-				sound-dai = <&i2s2>;
-			};
+			allwinner,playback-channels = <8>;
 		};
 
 		codec: codec@1c22c00 {
@@ -875,7 +878,7 @@
 			resets = <&ccu RST_BUS_HDMI1>;
 			reset-names = "ctrl";
 			phys = <&hdmi_phy>;
-			phy-names = "hdmi-phy";
+			phy-names = "phy";
 			status = "disabled";
 
 			ports {
@@ -932,7 +935,7 @@
 		};
 
 		ir: ir@1f02000 {
-			compatible = "allwinner,sun5i-a13-ir";
+			compatible = "allwinner,sun6i-a31-ir";
 			clocks = <&r_ccu CLK_APB0_IR>, <&r_ccu CLK_IR>;
 			clock-names = "apb", "ir";
 			resets = <&r_ccu RST_APB0_IR>;

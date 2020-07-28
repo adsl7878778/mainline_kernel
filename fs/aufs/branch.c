@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2005-2019 Junjiro R. Okajima
+ * Copyright (C) 2005-2020 Junjiro R. Okajima
  *
  * This program, aufs is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1290,11 +1290,10 @@ static int au_br_mod_files_ro(struct super_block *sb, aufs_bindex_t bindex)
 		spin_unlock(&hf->f_lock);
 		if (writer) {
 			h_inode = file_inode(hf);
+			if (hf->f_mode & FMODE_READ)
+				i_readcount_inc(h_inode);
 			put_write_access(h_inode);
 			__mnt_drop_write(hf->f_path.mnt);
-			if ((hf->f_mode & (FMODE_READ | FMODE_WRITE))
-			    == FMODE_READ)
-				i_readcount_inc(h_inode);
 		}
 	}
 

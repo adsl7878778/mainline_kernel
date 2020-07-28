@@ -121,6 +121,11 @@
 		};
 	};
 
+	vibrator {
+		compatible = "gpio-vibrator";
+		vcc-supply = <&reg_ldo_io1>;
+	};
+
 	reg_gps: reg-gps {
 		compatible = "regulator-fixed";
 		regulator-name = "gps";
@@ -239,8 +244,8 @@
 		compatible = "edt,edt-ft5x06";
 		reg = <0x38>;
 		interrupt-parent = <&r_pio>;
-		interrupts = <0 7 IRQ_TYPE_EDGE_FALLING>;
-		reset-gpios = <&pio 3 5 GPIO_ACTIVE_LOW>;
+		interrupts = <0 7 IRQ_TYPE_EDGE_FALLING>; /* PL7 */
+		reset-gpios = <&pio 3 5 GPIO_ACTIVE_LOW>; /* PD5 */
 		vcc-supply = <&reg_ldo_io0>;
 		touchscreen-size-x = <1024>;
 		touchscreen-size-y = <600>;
@@ -311,6 +316,7 @@
 	vqmmc-supply = <&reg_dldo1>;
 	non-removable;
 	wakeup-source;
+	keep-power-in-suspend;
 	status = "okay";
 
 	brcmf: wifi@1 {
@@ -602,7 +608,9 @@
 };
 
 &usbphy {
-	usb0_id_det-gpios = <&pio 7 11 GPIO_ACTIVE_HIGH>; /* PH11 */
+	usb0_id_det-gpios = <&pio 7 11 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>; /* PH11 */
+	usb0_vbus_power-supply = <&usb_power_supply>;
+	force-poll-vbus-id-det;
 	usb0_vbus-supply = <&reg_drivevbus>;
 	usb1_vbus-supply = <&reg_vmain>;
 	usb2_vbus-supply = <&reg_vmain>;

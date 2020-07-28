@@ -35,7 +35,7 @@
 /* L3C has 8-counters */
 #define L3C_NR_COUNTERS		0x8
 
-#define L3C_PERF_CTRL_EN	0x20000
+#define L3C_PERF_CTRL_EN	0x10000
 #define L3C_EVTYPE_NONE		0xff
 
 /*
@@ -206,10 +206,8 @@ static int hisi_l3c_pmu_init_irq(struct hisi_pmu *l3c_pmu,
 
 	/* Read and init IRQ */
 	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		dev_err(&pdev->dev, "L3C PMU get irq fail; irq:%d\n", irq);
+	if (irq < 0)
 		return irq;
-	}
 
 	ret = devm_request_irq(&pdev->dev, irq, hisi_l3c_pmu_isr,
 			       IRQF_NOBALANCING | IRQF_NO_THREAD,

@@ -97,6 +97,18 @@ allOf:
       properties:
         compatible:
           contains:
+            const: allwinner,sun50i-h6-rtc
+
+    then:
+      properties:
+        clock-output-names:
+          minItems: 3
+          maxItems: 3
+
+  - if:
+      properties:
+        compatible:
+          contains:
             const: allwinner,sun8i-r40-rtc
 
     then:
